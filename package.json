@@ -1,0 +1,31 @@
+{
+  "name": "qr-imposto",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "start": "npm --workspace @qr-imposto/mobile run start",
+    "android": "npm --workspace @qr-imposto/mobile run android",
+    "ios": "npm --workspace @qr-imposto/mobile run ios",
+    "web": "npm --workspace @qr-imposto/mobile run web",
+    "web:export": "npm --workspace @qr-imposto/mobile run export:web",
+    "test": "vitest run",
+    "test:live": "tsx packages/parsers/scripts/analyze-qr-examples.ts",
+    "typecheck": "tsc -b packages/core packages/parsers apps/mobile --pretty false",
+    "check": "npm run typecheck && npm run test"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "@types/pngjs": "^6.0.5",
+    "@zxing/library": "^0.21.3",
+    "jpeg-js": "^0.4.4",
+    "jsqr": "^1.4.0",
+    "pngjs": "^7.0.0",
+    "tsx": "^4.20.6",
+    "typescript": "~5.9.2",
+    "vitest": "^3.2.4"
+  }
+}

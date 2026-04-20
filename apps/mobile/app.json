@@ -1,0 +1,44 @@
+{
+  "expo": {
+    "name": "QR Imposto",
+    "slug": "qr-imposto",
+    "scheme": "qr-imposto",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "O QR Imposto usa a camera para ler o QR Code da NFC-e."
+      }
+    },
+    "android": {
+      "package": "br.com.qrimposto.app",
+      "versionCode": 1,
+      "permissions": [
+        "android.permission.CAMERA"
+      ],
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "90f93b7a-d2ac-48bb-b3a4-794f582b9eb8"
+      }
+    }
+  }
+}
