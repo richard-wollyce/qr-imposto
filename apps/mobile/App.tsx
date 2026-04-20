@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { CameraView, type BarcodeScanningResult, useCameraPermissions } from 'expo-camera';
+import { useCameraPermissions } from 'expo-camera';
 import * as Clipboard from 'expo-clipboard';
 import {
   ActivityIndicator,
@@ -38,6 +38,7 @@ import {
   shareImageWithSystem,
   type ShareCardCaptureRef,
 } from './src/share-capture';
+import { QrScannerView } from './src/QrScannerView';
 
 type ScreenState =
   | { status: 'scanning' }
@@ -69,6 +70,7 @@ function AppContent() {
   const [lastScannedValue, setLastScannedValue] = useState<string | undefined>();
   const [historyEntries, setHistoryEntries] = useState<ScanHistoryEntry[]>([]);
   const [historyNotice, setHistoryNotice] = useState<string | undefined>();
+  const isHandlingScanRef = useRef(false);
   const pageFetcher = useMemo<FetchLike>(
     () => (Platform.OS === 'web' ? fetchNfcePageViaProxy : (fetch as FetchLike)),
     [],
@@ -92,16 +94,24 @@ function AppContent() {
     };
   }, []);
 
-  const handleBarcodeScanned = useCallback(
-    async ({ data }: BarcodeScanningResult) => {
-      if (!data || screen.status !== 'scanning' || data === lastScannedValue) {
+  const handleQrScanned = useCallback(
+    async (data: string) => {
+      const scannedValue = data.trim();
+
+      if (
+        !scannedValue ||
+        screen.status !== 'scanning' ||
+        isHandlingScanRef.current ||
+        scannedValue === lastScannedValue
+      ) {
         return;
       }
 
-      setLastScannedValue(data);
+      isHandlingScanRef.current = true;
+      setLastScannedValue(scannedValue);
       setScreen({ status: 'processing' });
 
-      const result = await analyzeNfceQrUrl(data, pageFetcher);
+      const result = await analyzeNfceQrUrl(scannedValue, pageFetcher);
 
       if (result.ok) {
         setScreen({ status: 'result', result });
@@ -125,7 +135,17 @@ function AppContent() {
     [lastScannedValue, pageFetcher, screen.status],
   );
 
+  const handleScannerError = useCallback(
+    (message: string) => {
+      if (screen.status === 'scanning') {
+        setScreen({ status: 'error', message });
+      }
+    },
+    [screen.status],
+  );
+
   const resetScanner = useCallback(() => {
+    isHandlingScanRef.current = false;
     setLastScannedValue(undefined);
     setHistoryNotice(undefined);
     setScreen({ status: 'scanning' });
@@ -206,11 +226,11 @@ function AppContent() {
     <View style={styles.scannerScreen}>
       <StatusBar style="light" />
       {isScannerActive ? (
-        <CameraView
+        <QrScannerView
+          active={isScannerActive}
           style={StyleSheet.absoluteFill}
-          facing="back"
-          barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
-          onBarcodeScanned={handleBarcodeScanned}
+          onScan={handleQrScanned}
+          onError={handleScannerError}
         />
       ) : null}
       <View style={styles.scannerOverlay}>
