@@ -8,6 +8,8 @@ O QR Imposto le QR Codes de NFC-e de compras de consumo e mostra os tributos apr
 
 Nesta versao MVP, o suporte real de consulta e limitado a NFC-e de SP.
 
+O uso funcional acontece pelo aplicativo nativo Android. O site `qr.richardwollyce.com` serve como guia publico, canal de informacao e ponto de download do APK.
+
 ## Dados tratados
 
 O app pode tratar os seguintes dados para funcionar:
@@ -15,21 +17,19 @@ O app pode tratar os seguintes dados para funcionar:
 - imagem da camera apenas no momento da leitura do QR Code;
 - URL publica da NFC-e lida do QR Code;
 - dados exibidos na consulta publica da NFC-e, como estabelecimento, valor total e tributos aproximados;
-- resumo local das leituras feitas no dispositivo ou navegador.
+- resumo local das leituras feitas no dispositivo.
 
 ## Historico local
 
-O historico do MVP fica salvo localmente no dispositivo ou navegador. Ele nao e sincronizado em nuvem e nao depende de login.
+O historico do MVP fica salvo localmente no dispositivo. Ele nao e sincronizado em nuvem e nao depende de login.
 
 O historico salva apenas resumo da leitura: data, estabelecimento quando disponivel, valor total, tributos aproximados, percentual, confianca e fonte tecnica.
 
 O historico nao salva URL completa do QR Code, chave completa de acesso, HTML completo, XML completo ou itens da compra.
 
-## Servidor temporario na web
+## Site publico
 
-Na versao web, o QR Imposto usa um proxy temporario na Vercel para consultar a pagina publica da NFC-e de SP quando o navegador bloquear chamadas diretas por CORS.
-
-Esse proxy nao cria conta, nao grava banco de dados, nao salva historico, nao grava arquivos e nao persiste URL completa, chave completa, HTML, XML ou conteudo da compra.
+O site `qr.richardwollyce.com` nao le QR Code, nao usa camera, nao consulta NFC-e e nao mantem servidor proprio para processar dados fiscais. Ele informa sobre o projeto, orienta a instalacao e direciona para o APK oficial no GitHub Releases.
 
 ## Login e identificacao
 
@@ -45,8 +45,8 @@ O QR Imposto MVP nao compartilha historico local com terceiros.
 
 Nao ha retencao propria server-side no MVP.
 
-Dados locais permanecem somente no dispositivo ou navegador ate que a pessoa limpe o historico no app, desinstale o app ou apague os dados locais do navegador.
+Dados locais permanecem somente no dispositivo ate que a pessoa limpe o historico no app, desinstale o app ou apague os dados locais do app.
 
 ## Contato
 
-Para pedidos sobre privacidade ou seguranca, use o canal publico do projeto no GitHub quando o repositorio estiver publicado.
+Para pedidos sobre privacidade ou seguranca, use o canal publico do projeto no GitHub ou as informacoes disponibilizadas em `qr.richardwollyce.com`.

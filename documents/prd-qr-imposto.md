@@ -406,27 +406,26 @@ A voz do produto deve ser simples, clara, humana e forte.[cite:25] O aplicativo 
 
 O projeto passa a distribuir suas funcionalidades unicamente através do aplicativo nativo (APK). A estratégia de domínios reflete isso:
 
-- **`qr.richardwollyce.com`:** landing page e guia oficial do aplicativo. Nela, o projeto deve apresentar a solução, fornecer um passo a passo para instalação (download do APK, autorização no Android) e disponibilizar o arquivo oficial. Qualquer funcionalidade PWA (câmera no navegador) foi **removida e desencorajada** por questões de instabilidade e UX.
-- **`qrinfo.richardwollyce.com`:** no futuro, abrigará links para metodologia, contabilidade e mais informações sobre o projeto como um todo, separando o link útil (`qr.`) do link detalhado.
+- **`qr.richardwollyce.com`:** dominio canonico do projeto, reunindo landing page, guia de instalacao, duvidas, informacoes futuras e download do APK oficial. Qualquer funcionalidade de camera no navegador ou uso direto do app pela web foi **removida e desencorajada** por questoes de instabilidade e UX.
 
 Para o APK público, o projeto não deve versionar binários dentro do repositório. O caminho seguro é gerar o APK com EAS pelo perfil `preview`, publicar o arquivo como asset em uma GitHub Release versionada e incluir checksum SHA-256, changelog, commit SHA e link do build EAS. Arquivos `.apk`, `.aab`, keystores, service accounts e credenciais devem continuar fora do Git.
 
 ## Estado implementado até a Sprint 4
 
-- **App web publicado:** `qr.richardwollyce.com` está configurado como acesso direto ao app.
+- **Landing page publicada:** `qr.richardwollyce.com` esta configurado como guia e download do app Android.
 - **Card compartilhável da leitura individual:** gera PNG vertical 9:16 com valor da compra, tributos aproximados, percentual, confiança, metodologia curta, CTA e assinatura `Open-source • Desenvolvido por Richard Wollyce`.
 - **Cards de acumulado:** Hoje, Semana, Mês e Ano geram cards próprios a partir do histórico local.
-- **Compartilhamento com imagem:** Android/iOS usam share sheet nativo; web/PWA usa `navigator.share({ files })` quando disponível; navegadores sem suporte baixam o PNG.
-- **Ações sociais:** WhatsApp, Instagram, X, Copiar e Download aparecem alinhados na prévia do card. WhatsApp/X por web usam texto + link; imagem anexada depende do share sheet do sistema. Instagram usa share sheet quando possível e fallback por download.
+- **Compartilhamento com imagem:** Android usa share sheet nativo para compartilhar os cards gerados no app.
+- **Acoes sociais:** WhatsApp, Instagram, X, Copiar e Download aparecem alinhados na previa do card dentro do app Android.
 - **Privacidade do card:** nenhum card inclui estabelecimento, chave de acesso, URL da NFC-e, documento do emitente, HTML/XML ou itens da compra.
 - **Distribuição APK planejada:** APK deve ser publicado em GitHub Releases, nunca commitado no repositório.
 
 ## Próximas etapas do MVP público
 
-- **Validação Android físico e web HTTPS:** testar câmera, consulta, proxy web, áreas seguras do layout, persistência local e compartilhamento de imagem em aparelho real e no domínio final.
+- **Validacao Android fisico:** testar camera, consulta, areas seguras do layout, persistencia local e compartilhamento de imagem em aparelho real.
 - **Tela curta "Como calculamos":** explicar em linguagem comum a origem dos dados, o termo "tributos aproximados", a camada de confiança e a limitação inicial do suporte real a NFC-e de SP.
 - **Preparação de publicação pública:** finalizar README, política de privacidade publicada, screenshots, Data Safety da Play Store, APK em GitHub Release e checklist de release.
-- **Landing page informativa:** implementar futuramente `qrinfo.richardwollyce.com` com explicação do projeto, metodologia, links para app web, GitHub, APK e política de privacidade.
+- **Landing page informativa:** evoluir `qr.richardwollyce.com` como guia principal com explicacao do projeto, metodologia, links para GitHub, APK, politica de privacidade e duvidas frequentes.
 
 ## Roadmap sugerido
 
