@@ -255,7 +255,8 @@ O MVP deve ser propositalmente enxuto e centrado no momento de impacto principal
 ## Requisitos não funcionais
 
 - Mobile-first.
-- Android como prioridade inicial.[cite:25]
+- Android como prioridade inicial ja validada em APK publico.[cite:25]
+- iOS como segunda plataforma do MVP, com preparacao de build e distribuicao de teste para usuarios de iPhone ainda nesta semana.
 - UX extremamente simples.
 - Boa performance no fluxo de escaneamento.
 - Design legível em ambientes externos.
@@ -408,7 +409,9 @@ O projeto passa a distribuir suas funcionalidades unicamente através do aplicat
 
 - **`qr.richardwollyce.com`:** dominio canonico do projeto, reunindo landing page, guia de instalacao, duvidas, informacoes futuras e download do APK oficial. Qualquer funcionalidade de camera no navegador ou uso direto do app pela web foi **removida e desencorajada** por questoes de instabilidade e UX.
 
-Para o APK público, o projeto não deve versionar binários dentro do repositório. O caminho seguro é gerar o APK com EAS pelo perfil `preview`, publicar o arquivo como asset em uma GitHub Release versionada e incluir checksum SHA-256, changelog, commit SHA e link do build EAS. Arquivos `.apk`, `.aab`, keystores, service accounts e credenciais devem continuar fora do Git.
+Para o APK público, o projeto não deve versionar binários dentro do repositório. O caminho seguro é gerar o APK com EAS pelo perfil `preview`, publicar o arquivo como asset em uma GitHub Release versionada e incluir checksum SHA-256, changelog, commit SHA e link do build EAS.
+
+Para iOS, a etapa seguinte deve preparar o build nativo com EAS, assinatura Apple e distribuicao inicial adequada para testes em iPhone. Arquivos `.apk`, `.aab`, `.ipa`, keystores, service accounts, certificados, provisioning profiles e credenciais devem continuar fora do Git.
 
 ## Estado implementado até a Sprint 4
 
@@ -422,9 +425,10 @@ Para o APK público, o projeto não deve versionar binários dentro do repositó
 
 ## Próximas etapas do MVP público
 
-- **Validacao Android fisico:** testar camera, consulta, areas seguras do layout, persistencia local e compartilhamento de imagem em aparelho real.
+- **Redesign da tela de historico:** melhorar a pagina de historico para comunicar acumulado, recorrencia e impacto visual com mais clareza. A direcao estetica sera definida em um ciclo proprio de design, com referencias visuais antes da implementacao.
+- **Melhoria do compartilhamento de cards:** reduzir atrito para gerar e compartilhar cards, melhorar acabamento visual e revisar a experiencia dos cards de leitura individual e de acumulado por periodo.
+- **Preparacao iOS nesta semana:** iniciar o caminho para usuarios de iPhone, avaliando requisitos de assinatura, configuracao Expo/EAS, build de teste e forma inicial de distribuicao.
 - **Tela curta "Como calculamos":** explicar em linguagem comum a origem dos dados, o termo "tributos aproximados", a camada de confiança e a limitação inicial do suporte real a NFC-e de SP.
-- **Preparação de publicação pública:** finalizar README, política de privacidade publicada, screenshots, Data Safety da Play Store, APK em GitHub Release e checklist de release.
 - **Landing page informativa:** evoluir `qr.richardwollyce.com` como guia principal com explicacao do projeto, metodologia, links para GitHub, APK, politica de privacidade e duvidas frequentes.
 
 ## Roadmap sugerido
@@ -439,10 +443,13 @@ Para o APK público, o projeto não deve versionar binários dentro do repositó
 ### Fase 2 — MVP público
 
 - Histórico local.
+- Redesign da tela de historico com foco em acumulado, leitura rapida e impacto visual.
 - Acumulado por período.
 - Card compartilhável.
+- Fluxo de compartilhamento de cards com menos atrito e melhor acabamento visual.
 - Tela de metodologia.
 - Repositório público organizado.
+- Build inicial para iOS, com configuracao de assinatura e distribuicao de teste para usuarios de iPhone.
 
 ### Fase 3 — Expansão
 
