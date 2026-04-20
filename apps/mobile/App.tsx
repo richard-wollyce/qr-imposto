@@ -56,6 +56,14 @@ type ShareState =
 type ShareActionId = 'system' | 'whatsapp' | 'instagram' | 'x' | 'copy' | 'download';
 
 export default function App() {
+  if (Platform.OS === 'web') {
+    return (
+      <SafeAreaProvider>
+        <LandingPageScreen />
+      </SafeAreaProvider>
+    );
+  }
+
   return (
     <SafeAreaProvider>
       <AppContent />
@@ -66,7 +74,6 @@ export default function App() {
 function AppContent() {
   const insets = useSafeAreaInsets();
   const [permission, requestPermission] = useCameraPermissions();
-  const [hasBypassedPromo, setHasBypassedPromo] = useState(Platform.OS !== 'web');
   const [screen, setScreen] = useState<ScreenState>({ status: 'scanning' });
   const [lastScannedValue, setLastScannedValue] = useState<string | undefined>();
   const [historyEntries, setHistoryEntries] = useState<ScanHistoryEntry[]>([]);
@@ -169,10 +176,6 @@ function AppContent() {
 
   if (!permission) {
     return <LoadingScreen message="Preparando câmera..." />;
-  }
-
-  if (!hasBypassedPromo) {
-    return <PromoScreen onBypass={() => setHasBypassedPromo(true)} />;
   }
 
   if (!permission.granted) {
@@ -806,7 +809,7 @@ function formatHistoryDate(input: string): string {
   });
 }
 
-function PromoScreen({ onBypass }: { onBypass: () => void }) {
+function LandingPageScreen() {
   const insets = useSafeAreaInsets();
 
   const handleDownload = () => {
@@ -818,8 +821,8 @@ function PromoScreen({ onBypass }: { onBypass: () => void }) {
   return (
     <View style={styles.permissionScreen}>
       <StatusBar style="dark" />
-      <View
-        style={[
+      <ScrollView
+        contentContainerStyle={[
           styles.permissionContent,
           {
             paddingTop: Math.max(insets.top + 16, 32),
@@ -828,18 +831,33 @@ function PromoScreen({ onBypass }: { onBypass: () => void }) {
         ]}
       >
         <Text style={styles.brand}>QR Imposto</Text>
-        <Text style={styles.permissionTitle}>Melhor experiência no App Android</Text>
-        <Text style={styles.permissionText}>
-          O leitor de QR Code pelo navegador das câmeras de alguns celulares pode ser instável. Recomendamos instalar o pqueno app nativo para uma leitura super rápida, com total privacidade e histórico offline.
+        <Text style={styles.permissionTitle}>Descubra os tributos das suas compras.</Text>
+        
+        <Text style={[styles.permissionText, { marginBottom: 24 }]}>
+          Este é um projeto nativo Android de utilidade pública para escanear QR Codes de NFC-e (Nota Fiscal) e revelar os custos invisíveis do consumo de forma rápida e segura.
         </Text>
+
         <Pressable style={styles.primaryButton} onPress={handleDownload}>
           <Download color="#F8F4EA" size={20} strokeWidth={2.4} style={{ marginRight: 8 }} />
-          <Text style={styles.primaryButtonText}>Baixar App (Recomendado)</Text>
+          <Text style={styles.primaryButtonText}>Baixar Aplicativo .APK</Text>
         </Pressable>
-        <Pressable style={[styles.secondaryButton, { marginTop: 12 }]} onPress={onBypass}>
-          <Text style={styles.secondaryButtonText}>Continuar pelo Navegador</Text>
-        </Pressable>
-      </View>
+
+        <View style={{ marginTop: 40, gap: 16 }}>
+          <Text style={{ fontSize: 18, fontWeight: '900', color: '#111111' }}>Como instalar o arquivo?</Text>
+          <View style={{ gap: 8 }}>
+            <Text style={{ fontSize: 15, color: '#3E3A33', fontWeight: 'bold' }}>1. Faça o Download</Text>
+            <Text style={{ fontSize: 14, color: '#5C564A' }}>Clique no botão acima. O arquivo qr-imposto.apk será baixado no seu celular.</Text>
+          </View>
+          <View style={{ gap: 8 }}>
+            <Text style={{ fontSize: 15, color: '#3E3A33', fontWeight: 'bold' }}>2. Autorize a Fonte Desconhecida</Text>
+            <Text style={{ fontSize: 14, color: '#5C564A' }}>Como o app ainda não está na Play Store, o Android perguntará se você confia neste navegador para instalar apps. Permita a instalação.</Text>
+          </View>
+          <View style={{ gap: 8 }}>
+            <Text style={{ fontSize: 15, color: '#3E3A33', fontWeight: 'bold' }}>3. Instale e Escaneie</Text>
+            <Text style={{ fontSize: 14, color: '#5C564A' }}>Abra o aplicativo, dê permissão à sua câmera e comece a rastrear os fatos tributários nas suas compras diárias.</Text>
+          </View>
+        </View>
+      </ScrollView>
     </View>
   );
 }

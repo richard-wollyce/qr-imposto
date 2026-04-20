@@ -146,6 +146,8 @@ A linha de naming deve comunicar a ideia de “quanto vai para o governo” sem 
 
 O MVP deve ser propositalmente enxuto e centrado no momento de impacto principal: escanear uma nota e entender o imposto daquela compra.[cite:25]
 
+**Nota importante:** Após testes falhos com parsers de QR Code diretamente no navegador web, a distribuição oficial e o suporte ao MVP foram alterados para ser **100% App Nativo Android**. A interface web servirá exclusivamente como Landing Page de instalação.
+
 ### Funcionalidades do MVP
 
 - Abertura direta na câmera — zero toque até o escâner.[cite:25]
@@ -402,10 +404,10 @@ A voz do produto deve ser simples, clara, humana e forte.[cite:25] O aplicativo 
 
 ## Distribuição pública e domínios
 
-O MVP público deve separar o acesso direto ao app da página institucional do projeto:
+O projeto passa a distribuir suas funcionalidades unicamente através do aplicativo nativo (APK). A estratégia de domínios reflete isso:
 
-- **`qr.richardwollyce.com`:** acesso direto ao app web, com experiência mobile-first semelhante ao app instalado. Esse domínio deve abrir o scanner como fluxo principal e usar HTTPS para permitir câmera no navegador.
-- **`qrinfo.richardwollyce.com`:** landing page futura com informação sobre o projeto, por que ele foi feito, como funciona, metodologia, links para usar via web, baixar o APK, acessar o GitHub e consultar a política de privacidade. Essa landing page não faz parte da Sprint 4.
+- **`qr.richardwollyce.com`:** landing page e guia oficial do aplicativo. Nela, o projeto deve apresentar a solução, fornecer um passo a passo para instalação (download do APK, autorização no Android) e disponibilizar o arquivo oficial. Qualquer funcionalidade PWA (câmera no navegador) foi **removida e desencorajada** por questões de instabilidade e UX.
+- **`qrinfo.richardwollyce.com`:** no futuro, abrigará links para metodologia, contabilidade e mais informações sobre o projeto como um todo, separando o link útil (`qr.`) do link detalhado.
 
 Para o APK público, o projeto não deve versionar binários dentro do repositório. O caminho seguro é gerar o APK com EAS pelo perfil `preview`, publicar o arquivo como asset em uma GitHub Release versionada e incluir checksum SHA-256, changelog, commit SHA e link do build EAS. Arquivos `.apk`, `.aab`, keystores, service accounts e credenciais devem continuar fora do Git.
 
