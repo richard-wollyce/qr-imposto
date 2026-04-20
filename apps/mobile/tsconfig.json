@@ -11,5 +11,6 @@
   "references": [
     { "path": "../../packages/core" },
     { "path": "../../packages/parsers" }
-  ]
+  ],
+  "exclude": ["dist"]
 }

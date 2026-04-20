@@ -306,6 +306,8 @@ O compartilhamento é parte central da estratégia de crescimento do produto.[ci
 - Valor em destaque máximo.
 - Selo/open-source discreto.
 - CTA opcional: “Veja quanto imposto existe nas suas compras”.
+- A versão inicial do card de leitura individual não deve mostrar nome do estabelecimento, chave de acesso, URL completa do QR Code, documento do emitente, HTML/XML ou itens da compra.
+- A assinatura visual deve deixar claro que o projeto é open-source e foi desenvolvido por Richard Wollyce.
 
 ## Estratégia open-source
 
@@ -398,13 +400,31 @@ A voz do produto deve ser simples, clara, humana e forte.[cite:25] O aplicativo 
 - Começar com subset de cenários bem suportados.
 - Manter tela “Como calculamos” acessível e clara.[cite:30][cite:31]
 
+## Distribuição pública e domínios
+
+O MVP público deve separar o acesso direto ao app da página institucional do projeto:
+
+- **`qr.richardwollyce.com`:** acesso direto ao app web, com experiência mobile-first semelhante ao app instalado. Esse domínio deve abrir o scanner como fluxo principal e usar HTTPS para permitir câmera no navegador.
+- **`qrinfo.richardwollyce.com`:** landing page futura com informação sobre o projeto, por que ele foi feito, como funciona, metodologia, links para usar via web, baixar o APK, acessar o GitHub e consultar a política de privacidade. Essa landing page não faz parte da Sprint 4.
+
+Para o APK público, o projeto não deve versionar binários dentro do repositório. O caminho seguro é gerar o APK com EAS pelo perfil `preview`, publicar o arquivo como asset em uma GitHub Release versionada e incluir checksum SHA-256, changelog, commit SHA e link do build EAS. Arquivos `.apk`, `.aab`, keystores, service accounts e credenciais devem continuar fora do Git.
+
+## Estado implementado até a Sprint 4
+
+- **App web publicado:** `qr.richardwollyce.com` está configurado como acesso direto ao app.
+- **Card compartilhável da leitura individual:** gera PNG vertical 9:16 com valor da compra, tributos aproximados, percentual, confiança, metodologia curta, CTA e assinatura `Open-source • Desenvolvido por Richard Wollyce`.
+- **Cards de acumulado:** Hoje, Semana, Mês e Ano geram cards próprios a partir do histórico local.
+- **Compartilhamento com imagem:** Android/iOS usam share sheet nativo; web/PWA usa `navigator.share({ files })` quando disponível; navegadores sem suporte baixam o PNG.
+- **Ações sociais:** WhatsApp, Instagram, X, Copiar e Download aparecem alinhados na prévia do card. WhatsApp/X por web usam texto + link; imagem anexada depende do share sheet do sistema. Instagram usa share sheet quando possível e fallback por download.
+- **Privacidade do card:** nenhum card inclui estabelecimento, chave de acesso, URL da NFC-e, documento do emitente, HTML/XML ou itens da compra.
+- **Distribuição APK planejada:** APK deve ser publicado em GitHub Releases, nunca commitado no repositório.
+
 ## Próximas etapas do MVP público
 
-- **Card compartilhável da leitura individual:** gerar uma imagem simples com valor da compra, tributos aproximados, percentual, selo de metodologia e marca do projeto, pronta para WhatsApp, Instagram Stories e outras redes.
-- **Card de acumulado diário/mensal:** permitir compartilhar quanto já apareceu como tributos aproximados no dia e no mês, usando apenas os dados locais do usuário.
+- **Validação Android físico e web HTTPS:** testar câmera, consulta, proxy web, áreas seguras do layout, persistência local e compartilhamento de imagem em aparelho real e no domínio final.
 - **Tela curta "Como calculamos":** explicar em linguagem comum a origem dos dados, o termo "tributos aproximados", a camada de confiança e a limitação inicial do suporte real a NFC-e de SP.
-- **Validação Android físico e web HTTPS:** testar câmera, consulta, proxy web, áreas seguras do layout e persistência local em aparelho real e no domínio final.
-- **Preparação de publicação pública:** finalizar README, política de privacidade publicada, screenshots, Data Safety da Play Store, domínio web e checklist de release.
+- **Preparação de publicação pública:** finalizar README, política de privacidade publicada, screenshots, Data Safety da Play Store, APK em GitHub Release e checklist de release.
+- **Landing page informativa:** implementar futuramente `qrinfo.richardwollyce.com` com explicação do projeto, metodologia, links para app web, GitHub, APK e política de privacidade.
 
 ## Roadmap sugerido
 
