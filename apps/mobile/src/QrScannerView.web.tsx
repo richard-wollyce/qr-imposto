@@ -6,8 +6,6 @@ import type { QrScannerViewProps } from './QrScannerView.types';
 
 const WORKER_PATH = '/qr-scanner-worker.min.js';
 const MAX_SCANS_PER_SECOND = 15;
-const SCAN_REGION_RATIO = 0.78;
-const SCAN_REGION_DOWNSCALE = 480;
 
 QrScanner.WORKER_PATH = WORKER_PATH;
 
@@ -50,7 +48,6 @@ export function QrScannerView({ active, onScan, onError, style }: QrScannerViewP
         onScanRef.current(data);
       },
       {
-        calculateScanRegion,
         maxScansPerSecond: MAX_SCANS_PER_SECOND,
         onDecodeError: () => undefined,
         preferredCamera: 'environment',
@@ -89,21 +86,6 @@ export function QrScannerView({ active, onScan, onError, style }: QrScannerViewP
   );
 }
 
-function calculateScanRegion(video: HTMLVideoElement): QrScanner.ScanRegion {
-  const sourceWidth = video.videoWidth || video.clientWidth || SCAN_REGION_DOWNSCALE;
-  const sourceHeight = video.videoHeight || video.clientHeight || sourceWidth;
-  const size = Math.max(1, Math.floor(Math.min(sourceWidth, sourceHeight) * SCAN_REGION_RATIO));
-  const downScaledSize = Math.min(size, SCAN_REGION_DOWNSCALE);
-
-  return {
-    x: Math.floor((sourceWidth - size) / 2),
-    y: Math.floor((sourceHeight - size) / 2),
-    width: size,
-    height: size,
-    downScaledWidth: downScaledSize,
-    downScaledHeight: downScaledSize,
-  };
-}
 
 function cameraErrorMessage(error: unknown): string {
   const name = error instanceof DOMException ? error.name : undefined;

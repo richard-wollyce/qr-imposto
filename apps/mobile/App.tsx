@@ -66,6 +66,7 @@ export default function App() {
 function AppContent() {
   const insets = useSafeAreaInsets();
   const [permission, requestPermission] = useCameraPermissions();
+  const [hasBypassedPromo, setHasBypassedPromo] = useState(Platform.OS !== 'web');
   const [screen, setScreen] = useState<ScreenState>({ status: 'scanning' });
   const [lastScannedValue, setLastScannedValue] = useState<string | undefined>();
   const [historyEntries, setHistoryEntries] = useState<ScanHistoryEntry[]>([]);
@@ -168,6 +169,10 @@ function AppContent() {
 
   if (!permission) {
     return <LoadingScreen message="Preparando câmera..." />;
+  }
+
+  if (!hasBypassedPromo) {
+    return <PromoScreen onBypass={() => setHasBypassedPromo(true)} />;
   }
 
   if (!permission.granted) {
@@ -799,6 +804,44 @@ function formatHistoryDate(input: string): string {
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+
+function PromoScreen({ onBypass }: { onBypass: () => void }) {
+  const insets = useSafeAreaInsets();
+
+  const handleDownload = () => {
+    Linking.openURL('https://github.com/richard-wollyce/qr-imposto/releases/latest/download/qr-imposto.apk').catch(() => {
+      // Fallback if the URL fails to open
+    });
+  };
+
+  return (
+    <View style={styles.permissionScreen}>
+      <StatusBar style="dark" />
+      <View
+        style={[
+          styles.permissionContent,
+          {
+            paddingTop: Math.max(insets.top + 16, 32),
+            paddingBottom: Math.max(insets.bottom + 28, 52),
+          },
+        ]}
+      >
+        <Text style={styles.brand}>QR Imposto</Text>
+        <Text style={styles.permissionTitle}>Melhor experiência no App Android</Text>
+        <Text style={styles.permissionText}>
+          O leitor de QR Code pelo navegador das câmeras de alguns celulares pode ser instável. Recomendamos instalar o pqueno app nativo para uma leitura super rápida, com total privacidade e histórico offline.
+        </Text>
+        <Pressable style={styles.primaryButton} onPress={handleDownload}>
+          <Download color="#F8F4EA" size={20} strokeWidth={2.4} style={{ marginRight: 8 }} />
+          <Text style={styles.primaryButtonText}>Baixar App (Recomendado)</Text>
+        </Pressable>
+        <Pressable style={[styles.secondaryButton, { marginTop: 12 }]} onPress={onBypass}>
+          <Text style={styles.secondaryButtonText}>Continuar pelo Navegador</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
