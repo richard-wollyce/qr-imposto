@@ -1,17 +1,11 @@
-import { createElement, useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
-import QrScanner from 'qr-scanner';
-import type { CSSProperties } from 'react';
+import { Html5Qrcode } from 'html5-qrcode';
 import type { QrScannerViewProps } from './QrScannerView.types';
 
-const WORKER_PATH = '/qr-scanner-worker.min.js';
-const MAX_SCANS_PER_SECOND = 15;
-
-QrScanner.WORKER_PATH = WORKER_PATH;
+const QR_REGION_ID = 'qr-reader';
 
 export function QrScannerView({ active, onScan, onError, style }: QrScannerViewProps) {
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const scannerRef = useRef<QrScanner | null>(null);
   const onScanRef = useRef(onScan);
   const onErrorRef = useRef(onError);
   const didScanRef = useRef(false);
@@ -25,67 +19,56 @@ export function QrScannerView({ active, onScan, onError, style }: QrScannerViewP
   }, [onError]);
 
   useEffect(() => {
-    const video = videoRef.current;
-
-    if (!active || !video) {
+    if (!active) {
       return undefined;
     }
 
-    let isDisposed = false;
     didScanRef.current = false;
+    let isDisposed = false;
 
-    const scanner = new QrScanner(
-      video,
-      (result) => {
-        const data = result.data.trim();
+    const html5QrCode = new Html5Qrcode(QR_REGION_ID);
 
+    html5QrCode.start(
+      { facingMode: 'environment' },
+      {
+        fps: 10,
+      },
+      (decodedText) => {
+        const data = decodedText.trim();
         if (!data || didScanRef.current) {
           return;
         }
 
         didScanRef.current = true;
-        void scanner.pause(true).catch(() => undefined);
+        void html5QrCode.stop().catch(() => undefined);
         onScanRef.current(data);
       },
-      {
-        maxScansPerSecond: MAX_SCANS_PER_SECOND,
-        onDecodeError: () => undefined,
-        preferredCamera: 'environment',
-        returnDetailedScanResult: true,
-      },
-    );
-
-    scannerRef.current = scanner;
-
-    scanner.start().catch((error) => {
+      () => {
+        // Parse error on frame, simply ignore to continue scanning
+      }
+    ).catch((error) => {
       if (!isDisposed) {
-        onErrorRef.current?.(cameraErrorMessage(error));
+         onErrorRef.current?.(cameraErrorMessage(error));
       }
     });
 
     return () => {
       isDisposed = true;
-      scanner.destroy();
-
-      if (scannerRef.current === scanner) {
-        scannerRef.current = null;
+      if (html5QrCode.isScanning) {
+        html5QrCode.stop().then(() => html5QrCode.clear()).catch(() => undefined);
+      } else {
+        html5QrCode.clear();
       }
     };
   }, [active]);
 
   return (
     <View pointerEvents="none" style={[styles.container, style]}>
-      {createElement('video', {
-        autoPlay: true,
-        muted: true,
-        playsInline: true,
-        ref: videoRef,
-        style: videoStyle,
-      })}
+      {/* @ts-ignore */}
+      <div id={QR_REGION_ID} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
     </View>
   );
 }
-
 
 function cameraErrorMessage(error: unknown): string {
   const name = error instanceof DOMException ? error.name : undefined;
@@ -100,12 +83,6 @@ function cameraErrorMessage(error: unknown): string {
 
   return 'Nao foi possivel iniciar a camera neste navegador. Tente recarregar a pagina ou usar o app Android.';
 }
-
-const videoStyle: CSSProperties = {
-  height: '100%',
-  objectFit: 'cover',
-  width: '100%',
-};
 
 const styles = StyleSheet.create({
   container: {
