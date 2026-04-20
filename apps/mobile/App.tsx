@@ -5,17 +5,18 @@ import {
   ActivityIndicator,
   Platform,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { formatCurrency, formatPercentage, type ScanResult } from '@qr-imposto/core';
 import { analyzeNfceQrUrl, type FetchLike } from '@qr-imposto/parsers';
 import {
   clearScanHistory,
   loadScanHistory,
+  removeScanHistoryEntry,
   saveScanResult,
   summarizeScanHistory,
   type HistorySummary,
@@ -30,10 +31,20 @@ type ScreenState =
   | { status: 'error'; message: string };
 
 export default function App() {
+  return (
+    <SafeAreaProvider>
+      <AppContent />
+    </SafeAreaProvider>
+  );
+}
+
+function AppContent() {
+  const insets = useSafeAreaInsets();
   const [permission, requestPermission] = useCameraPermissions();
   const [screen, setScreen] = useState<ScreenState>({ status: 'scanning' });
   const [lastScannedValue, setLastScannedValue] = useState<string | undefined>();
   const [historyEntries, setHistoryEntries] = useState<ScanHistoryEntry[]>([]);
+  const [historyNotice, setHistoryNotice] = useState<string | undefined>();
   const pageFetcher = useMemo<FetchLike>(
     () => (Platform.OS === 'web' ? fetchNfcePageViaProxy : (fetch as FetchLike)),
     [],
@@ -72,9 +83,15 @@ export default function App() {
         setScreen({ status: 'result', result });
 
         try {
-          const entries = await saveScanResult(result);
-          setHistoryEntries(entries);
+          const saveOutcome = await saveScanResult(result);
+          setHistoryEntries(saveOutcome.entries);
+          setHistoryNotice(
+            saveOutcome.status === 'duplicate'
+              ? 'Esta NFC-e já estava no histórico. Não somamos novamente.'
+              : undefined,
+          );
         } catch {
+          setHistoryNotice(undefined);
           // The scan result stays visible even if local storage is unavailable.
         }
       } else {
@@ -86,6 +103,7 @@ export default function App() {
 
   const resetScanner = useCallback(() => {
     setLastScannedValue(undefined);
+    setHistoryNotice(undefined);
     setScreen({ status: 'scanning' });
   }, []);
 
@@ -96,36 +114,64 @@ export default function App() {
   const clearHistory = useCallback(async () => {
     await clearScanHistory();
     setHistoryEntries([]);
+    setHistoryNotice(undefined);
+  }, []);
+
+  const removeHistoryEntry = useCallback(async (id: string) => {
+    const entries = await removeScanHistoryEntry(id);
+    setHistoryEntries(entries);
   }, []);
 
   if (!permission) {
-    return <LoadingScreen message="Preparando camera..." />;
+    return <LoadingScreen message="Preparando câmera..." />;
   }
 
   if (!permission.granted) {
     return (
-      <SafeAreaView style={styles.permissionScreen}>
+      <View style={styles.permissionScreen}>
         <StatusBar style="dark" />
-        <View style={styles.permissionContent}>
+        <View
+          style={[
+            styles.permissionContent,
+            {
+              paddingTop: Math.max(insets.top + 16, 32),
+              paddingBottom: Math.max(insets.bottom + 28, 52),
+            },
+          ]}
+        >
           <Text style={styles.brand}>QR Imposto</Text>
-          <Text style={styles.permissionTitle}>A camera e necessaria para ler o QR Code da NFC-e.</Text>
+          <Text style={styles.permissionTitle}>A câmera é necessária para ler o QR Code da NFC-e.</Text>
           <Text style={styles.permissionText}>
-            A leitura acontece no seu dispositivo. No MVP, o historico fica local e nao e salvo em nuvem.
+            A leitura acontece no seu dispositivo. No MVP, o histórico fica local e não é salvo em nuvem.
           </Text>
           <Pressable style={styles.primaryButton} onPress={requestPermission}>
-            <Text style={styles.primaryButtonText}>Permitir camera</Text>
+            <Text style={styles.primaryButtonText}>Permitir câmera</Text>
           </Pressable>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   if (screen.status === 'result') {
-    return <ResultScreen result={screen.result} onScanAgain={resetScanner} onOpenHistory={openHistory} />;
+    return (
+      <ResultScreen
+        result={screen.result}
+        historyNotice={historyNotice}
+        onScanAgain={resetScanner}
+        onOpenHistory={openHistory}
+      />
+    );
   }
 
   if (screen.status === 'history') {
-    return <HistoryScreen entries={historyEntries} onBack={resetScanner} onClear={clearHistory} />;
+    return (
+      <HistoryScreen
+        entries={historyEntries}
+        onBack={resetScanner}
+        onClear={clearHistory}
+        onRemoveEntry={removeHistoryEntry}
+      />
+    );
   }
 
   if (screen.status === 'error') {
@@ -144,12 +190,20 @@ export default function App() {
         />
       ) : null}
       <View style={styles.scannerOverlay}>
-        <SafeAreaView style={styles.scannerSafeArea}>
+        <View
+          style={[
+            styles.scannerSafeArea,
+            {
+              paddingTop: Math.max(insets.top + 14, 32),
+              paddingBottom: Math.max(insets.bottom + 28, 54),
+            },
+          ]}
+        >
           <View style={styles.scannerHeader}>
             <View style={styles.scannerTopBar}>
               <Text style={styles.scannerBrand}>QR Imposto</Text>
               <Pressable style={styles.lightButton} onPress={openHistory}>
-                <Text style={styles.lightButtonText}>Historico</Text>
+                <Text style={styles.lightButtonText}>Histórico</Text>
               </Pressable>
             </View>
             <Text style={styles.scannerSubtitle}>Aponte para o QR Code da nota fiscal de compra.</Text>
@@ -167,10 +221,10 @@ export default function App() {
                 <Text style={styles.processingText}>Consultando NFC-e...</Text>
               </View>
             ) : (
-              <Text style={styles.scannerHint}>Use uma NFC-e de SP de mercado, loja, farmacia ou posto.</Text>
+              <Text style={styles.scannerHint}>Use uma NFC-e de SP de mercado, loja, farmácia ou posto.</Text>
             )}
           </View>
-        </SafeAreaView>
+        </View>
       </View>
     </View>
   );
@@ -178,20 +232,31 @@ export default function App() {
 
 function ResultScreen({
   result,
+  historyNotice,
   onScanAgain,
   onOpenHistory,
 }: {
   result: Extract<ScanResult, { ok: true }>;
+  historyNotice?: string;
   onScanAgain: () => void;
   onOpenHistory: () => void;
 }) {
+  const insets = useSafeAreaInsets();
   const percent = useMemo(() => formatPercentage(result.computation.percentage), [result.computation.percentage]);
-  const issuer = result.invoice.issuerName ?? 'Estabelecimento nao identificado';
+  const issuer = result.invoice.issuerName ?? 'Estabelecimento não identificado';
 
   return (
-    <SafeAreaView style={styles.resultScreen}>
+    <View style={styles.resultScreen}>
       <StatusBar style="dark" />
-      <ScrollView contentContainerStyle={styles.resultContent}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.resultContent,
+          {
+            paddingTop: Math.max(insets.top + 16, 32),
+            paddingBottom: Math.max(insets.bottom + 34, 64),
+          },
+        ]}
+      >
         <Text style={styles.brand}>QR Imposto</Text>
         <Text style={styles.resultEyebrow}>{issuer}</Text>
         <Text style={styles.resultTitle}>{result.insight.fact}</Text>
@@ -218,6 +283,12 @@ function ResultScreen({
 
         <Text style={styles.impactText}>{result.insight.impact}</Text>
 
+        {historyNotice ? (
+          <View style={styles.noticeBox}>
+            <Text style={styles.noticeText}>{historyNotice}</Text>
+          </View>
+        ) : null}
+
         <Pressable style={styles.primaryButton} onPress={onScanAgain}>
           <Text style={styles.primaryButtonText}>Escanear outra nota</Text>
         </Pressable>
@@ -225,7 +296,7 @@ function ResultScreen({
           <Text style={styles.secondaryButtonText}>Ver acumulados locais</Text>
         </Pressable>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -233,18 +304,29 @@ function HistoryScreen({
   entries,
   onBack,
   onClear,
+  onRemoveEntry,
 }: {
   entries: ScanHistoryEntry[];
   onBack: () => void;
   onClear: () => void;
+  onRemoveEntry: (id: string) => void;
 }) {
+  const insets = useSafeAreaInsets();
   const summaries = useMemo(() => summarizeScanHistory(entries), [entries]);
   const latestEntries = entries.slice(0, 6);
 
   return (
-    <SafeAreaView style={styles.resultScreen}>
+    <View style={styles.resultScreen}>
       <StatusBar style="dark" />
-      <ScrollView contentContainerStyle={styles.historyContent}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.historyContent,
+          {
+            paddingTop: Math.max(insets.top + 16, 32),
+            paddingBottom: Math.max(insets.bottom + 34, 64),
+          },
+        ]}
+      >
         <View style={styles.historyTopBar}>
           <Text style={styles.brand}>QR Imposto</Text>
           <Pressable style={styles.secondaryButtonSmall} onPress={onBack}>
@@ -254,13 +336,13 @@ function HistoryScreen({
 
         <Text style={styles.historyTitle}>Seus tributos aproximados</Text>
         <Text style={styles.historyText}>
-          Historico salvo somente neste dispositivo ou navegador. Sem login, sem sincronizacao em nuvem.
+          Histórico salvo somente neste dispositivo ou navegador. Sem login, sem sincronização em nuvem.
         </Text>
 
         <View style={styles.summaryGrid}>
           <SummaryCard label="Hoje" summary={summaries.today} />
           <SummaryCard label="Semana" summary={summaries.week} />
-          <SummaryCard label="Mes" summary={summaries.month} />
+          <SummaryCard label="Mês" summary={summaries.month} />
           <SummaryCard label="Ano" summary={summaries.year} />
           <SummaryCard label="Total local" summary={summaries.all} wide />
         </View>
@@ -272,14 +354,19 @@ function HistoryScreen({
               <View key={entry.id} style={styles.historyItem}>
                 <View style={styles.historyItemHeader}>
                   <Text style={styles.historyItemTitle} numberOfLines={1}>
-                    {entry.issuerName ?? 'Estabelecimento nao identificado'}
+                    {entry.issuerName ?? 'Estabelecimento não identificado'}
                   </Text>
                   <Text style={styles.historyItemDate}>{formatHistoryDate(entry.scannedAt)}</Text>
                 </View>
-                <Text style={styles.historyItemDetail}>
-                  {formatCurrency(entry.approximateTaxAmount)} de {formatCurrency(entry.totalAmount)} -{' '}
-                  {formatPercentage(entry.percentage)}
-                </Text>
+                <View style={styles.historyItemFooter}>
+                  <Text style={styles.historyItemDetail}>
+                    {formatCurrency(entry.approximateTaxAmount)} de {formatCurrency(entry.totalAmount)} -{' '}
+                    {formatPercentage(entry.percentage)}
+                  </Text>
+                  <Pressable style={styles.removeButton} onPress={() => onRemoveEntry(entry.id)}>
+                    <Text style={styles.removeButtonText}>Remover</Text>
+                  </Pressable>
+                </View>
               </View>
             ))}
           </View>
@@ -292,11 +379,11 @@ function HistoryScreen({
 
         {entries.length > 0 ? (
           <Pressable style={styles.dangerButton} onPress={onClear}>
-            <Text style={styles.dangerButtonText}>Limpar historico local</Text>
+            <Text style={styles.dangerButtonText}>Limpar histórico local</Text>
           </Pressable>
         ) : null}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -328,30 +415,50 @@ function Metric({ label, value }: { label: string; value: string }) {
 }
 
 function ErrorScreen({ message, onScanAgain }: { message: string; onScanAgain: () => void }) {
+  const insets = useSafeAreaInsets();
+
   return (
-    <SafeAreaView style={styles.errorScreen}>
+    <View style={styles.errorScreen}>
       <StatusBar style="dark" />
-      <View style={styles.errorContent}>
+      <View
+        style={[
+          styles.errorContent,
+          {
+            paddingTop: Math.max(insets.top + 16, 32),
+            paddingBottom: Math.max(insets.bottom + 28, 52),
+          },
+        ]}
+      >
         <Text style={styles.brand}>QR Imposto</Text>
-        <Text style={styles.errorTitle}>Nao deu para ler essa NFC-e.</Text>
+        <Text style={styles.errorTitle}>Não deu para ler essa NFC-e.</Text>
         <Text style={styles.errorText}>{message}</Text>
         <Pressable style={styles.primaryButton} onPress={onScanAgain}>
           <Text style={styles.primaryButtonText}>Tentar novamente</Text>
         </Pressable>
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 
 function LoadingScreen({ message }: { message: string }) {
+  const insets = useSafeAreaInsets();
+
   return (
-    <SafeAreaView style={styles.permissionScreen}>
+    <View style={styles.permissionScreen}>
       <StatusBar style="dark" />
-      <View style={styles.loadingContent}>
+      <View
+        style={[
+          styles.loadingContent,
+          {
+            paddingTop: Math.max(insets.top + 16, 32),
+            paddingBottom: Math.max(insets.bottom + 28, 52),
+          },
+        ]}
+      >
         <ActivityIndicator color="#111111" />
         <Text style={styles.permissionText}>{message}</Text>
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -675,6 +782,19 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 23,
   },
+  noticeBox: {
+    borderRadius: 8,
+    backgroundColor: '#EFE6CF',
+    borderWidth: 1,
+    borderColor: '#D8CFBA',
+    padding: 12,
+  },
+  noticeText: {
+    color: '#3E3A33',
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '800',
+  },
   historyContent: {
     padding: 24,
     gap: 18,
@@ -765,9 +885,31 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   historyItemDetail: {
+    flex: 1,
     color: '#3E3A33',
     fontSize: 14,
     lineHeight: 20,
+  },
+  historyItemFooter: {
+    minHeight: 32,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  removeButton: {
+    minHeight: 32,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#8A2E2E',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+  },
+  removeButtonText: {
+    color: '#8A2E2E',
+    fontSize: 12,
+    fontWeight: '900',
   },
   emptyHistory: {
     borderTopWidth: 1,

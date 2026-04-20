@@ -247,6 +247,8 @@ O MVP deve ser propositalmente enxuto e centrado no momento de impacto principal
 
 - O usuário deve poder manter histórico local das leituras no dispositivo.
 - O histórico deve ser dispensável para usar o app pela primeira vez.
+- O histórico local deve evitar duplicidade usando a identidade da NFC-e, derivada da chave de acesso, e não comparação de preço, tributo, percentual, estabelecimento ou horário.
+- O usuário deve poder remover leituras individuais do histórico local quando quiser corrigir uma leitura indevida ou um registro antigo duplicado.
 
 ## Requisitos não funcionais
 
@@ -395,6 +397,14 @@ A voz do produto deve ser simples, clara, humana e forte.[cite:25] O aplicativo 
 - Sinalizar nível de confiança.
 - Começar com subset de cenários bem suportados.
 - Manter tela “Como calculamos” acessível e clara.[cite:30][cite:31]
+
+## Próximas etapas do MVP público
+
+- **Card compartilhável da leitura individual:** gerar uma imagem simples com valor da compra, tributos aproximados, percentual, selo de metodologia e marca do projeto, pronta para WhatsApp, Instagram Stories e outras redes.
+- **Card de acumulado diário/mensal:** permitir compartilhar quanto já apareceu como tributos aproximados no dia e no mês, usando apenas os dados locais do usuário.
+- **Tela curta "Como calculamos":** explicar em linguagem comum a origem dos dados, o termo "tributos aproximados", a camada de confiança e a limitação inicial do suporte real a NFC-e de SP.
+- **Validação Android físico e web HTTPS:** testar câmera, consulta, proxy web, áreas seguras do layout e persistência local em aparelho real e no domínio final.
+- **Preparação de publicação pública:** finalizar README, política de privacidade publicada, screenshots, Data Safety da Play Store, domínio web e checklist de release.
 
 ## Roadmap sugerido
 
