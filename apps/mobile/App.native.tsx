@@ -1,10 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { useCameraPermissions } from 'expo-camera';
-import * as Clipboard from 'expo-clipboard';
 import {
   ActivityIndicator,
-  Linking,
   Modal,
   Pressable,
   ScrollView,
@@ -13,15 +11,28 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { AtSign, Camera, Copy, Download, MessageCircle, Share2 } from 'lucide-react-native';
-import { formatCurrency, formatPercentage, type ScanResult } from '@qr-imposto/core';
+import Svg, { Circle, Path } from 'react-native-svg';
+import {
+  ArrowLeft,
+  ChartColumn,
+  History as HistoryIcon,
+  QrCode,
+  ScanLine,
+  Share2,
+  Trash2,
+} from 'lucide-react-native';
+import { confidenceLabel as formatConfidenceLabel, formatCurrency, formatPercentage, type ScanResult } from '@qr-imposto/core';
 import { analyzeNfceQrUrl, type FetchLike } from '@qr-imposto/parsers';
 import {
+  buildMonthlyTaxSeries,
+  buildWeeklyTaxSeries,
+  buildYearlyTaxSeries,
   clearScanHistory,
   loadScanHistory,
   removeScanHistoryEntry,
   saveScanResult,
   summarizeScanHistory,
+  type HistorySeriesPoint,
   type HistorySummary,
   type ScanHistoryEntry,
 } from './src/history';
@@ -33,7 +44,6 @@ import {
 } from './src/share-card';
 import {
   captureShareCardImage,
-  downloadShareCardImage,
   shareImageWithSystem,
   type ShareCardCaptureRef,
 } from './src/share-capture';
@@ -44,7 +54,10 @@ type ScreenState =
   | { status: 'processing' }
   | { status: 'result'; result: Extract<ScanResult, { ok: true }> }
   | { status: 'history' }
+  | { status: 'insights' }
   | { status: 'error'; message: string };
+
+type MainTab = 'scanner' | 'history' | 'insights';
 
 type ShareState =
   | { status: 'idle' }
@@ -52,7 +65,7 @@ type ShareState =
   | { status: 'success'; message: string }
   | { status: 'error'; message: string };
 
-type ShareActionId = 'system' | 'whatsapp' | 'instagram' | 'x' | 'copy' | 'download';
+type ShareActionId = 'system';
 
 export default function App() {
   return (
@@ -147,9 +160,28 @@ function AppContent() {
     setScreen({ status: 'scanning' });
   }, []);
 
+  const selectMainTab = useCallback(
+    (tab: MainTab) => {
+      if (tab === 'scanner') {
+        resetScanner();
+        return;
+      }
+
+      isHandlingScanRef.current = false;
+      setLastScannedValue(undefined);
+      setHistoryNotice(undefined);
+      setScreen({ status: tab });
+    },
+    [resetScanner],
+  );
+
   const openHistory = useCallback(() => {
-    setScreen({ status: 'history' });
-  }, []);
+    selectMainTab('history');
+  }, [selectMainTab]);
+
+  const openInsights = useCallback(() => {
+    selectMainTab('insights');
+  }, [selectMainTab]);
 
   const clearHistory = useCallback(async () => {
     await clearScanHistory();
@@ -199,6 +231,7 @@ function AppContent() {
         historyNotice={historyNotice}
         onScanAgain={resetScanner}
         onOpenHistory={openHistory}
+        onOpenInsights={openInsights}
       />
     );
   }
@@ -207,11 +240,15 @@ function AppContent() {
     return (
       <HistoryScreen
         entries={historyEntries}
-        onBack={resetScanner}
+        onSelectTab={selectMainTab}
         onClear={clearHistory}
         onRemoveEntry={removeHistoryEntry}
       />
     );
+  }
+
+  if (screen.status === 'insights') {
+    return <InsightsScreen entries={historyEntries} onSelectTab={selectMainTab} />;
   }
 
   if (screen.status === 'error') {
@@ -235,16 +272,17 @@ function AppContent() {
             styles.scannerSafeArea,
             {
               paddingTop: Math.max(insets.top + 14, 32),
-              paddingBottom: Math.max(insets.bottom + 28, 54),
+              paddingBottom: Math.max(insets.bottom + 112, 132),
             },
           ]}
         >
           <View style={styles.scannerHeader}>
             <View style={styles.scannerTopBar}>
               <Text style={styles.scannerBrand}>QR Imposto</Text>
-              <Pressable style={styles.lightButton} onPress={openHistory}>
-                <Text style={styles.lightButtonText}>Histórico</Text>
-              </Pressable>
+              <View style={styles.scannerModePill}>
+                <QrCode color="#F8F4EA" size={17} strokeWidth={2.4} />
+                <Text style={styles.scannerModeText}>Scanner</Text>
+              </View>
             </View>
             <Text style={styles.scannerSubtitle}>Aponte para o QR Code da nota fiscal de compra.</Text>
           </View>
@@ -265,7 +303,84 @@ function AppContent() {
             )}
           </View>
         </View>
+        <BottomTabBar
+          activeTab="scanner"
+          bottomInset={insets.bottom}
+          disabled={screen.status === 'processing'}
+          onSelectTab={selectMainTab}
+          variant="dark"
+        />
       </View>
+    </View>
+  );
+}
+
+function BottomTabBar({
+  activeTab,
+  bottomInset,
+  disabled = false,
+  onSelectTab,
+  variant = 'light',
+}: {
+  activeTab: MainTab;
+  bottomInset: number;
+  disabled?: boolean;
+  onSelectTab: (tab: MainTab) => void;
+  variant?: 'light' | 'dark';
+}) {
+  const isDark = variant === 'dark';
+  const activeColor = isDark ? '#FFFFFF' : '#1349EC';
+  const inactiveColor = isDark ? '#B7C5FF' : '#6B7280';
+  const tabItems = [
+    {
+      id: 'scanner' as const,
+      label: 'Scanner',
+      icon: (color: string) => <ScanLine color={color} size={21} strokeWidth={2.4} />,
+    },
+    {
+      id: 'history' as const,
+      label: 'Histórico',
+      icon: (color: string) => <HistoryIcon color={color} size={21} strokeWidth={2.4} />,
+    },
+    {
+      id: 'insights' as const,
+      label: 'Insights',
+      icon: (color: string) => <ChartColumn color={color} size={21} strokeWidth={2.4} />,
+    },
+  ];
+
+  return (
+    <View
+      style={[
+        styles.bottomTabBar,
+        isDark ? styles.bottomTabBarDark : styles.bottomTabBarLight,
+        { bottom: Math.max(bottomInset + 8, 16) },
+      ]}
+    >
+      {tabItems.map((item) => {
+        const isActive = activeTab === item.id;
+        const color = isActive ? activeColor : inactiveColor;
+
+        return (
+          <Pressable
+            key={item.id}
+            accessibilityRole="button"
+            accessibilityLabel={item.label}
+            style={[
+              styles.bottomTabButton,
+              isActive ? (isDark ? styles.bottomTabButtonActiveDark : styles.bottomTabButtonActiveLight) : null,
+              disabled && !isActive ? styles.disabledButton : null,
+            ]}
+            onPress={() => onSelectTab(item.id)}
+            disabled={disabled && !isActive}
+          >
+            {item.icon(color)}
+            <Text style={[styles.bottomTabLabel, { color }]} numberOfLines={1} adjustsFontSizeToFit>
+              {item.label}
+            </Text>
+          </Pressable>
+        );
+      })}
     </View>
   );
 }
@@ -275,11 +390,13 @@ function ResultScreen({
   historyNotice,
   onScanAgain,
   onOpenHistory,
+  onOpenInsights,
 }: {
   result: Extract<ScanResult, { ok: true }>;
   historyNotice?: string;
   onScanAgain: () => void;
   onOpenHistory: () => void;
+  onOpenInsights: () => void;
 }) {
   const insets = useSafeAreaInsets();
   const percent = useMemo(() => formatPercentage(result.computation.percentage), [result.computation.percentage]);
@@ -298,31 +415,27 @@ function ResultScreen({
           },
         ]}
       >
-        <Text style={styles.brand}>QR Imposto</Text>
-        <Text style={styles.resultEyebrow}>{issuer}</Text>
-        <Text style={styles.resultTitle}>{result.insight.fact}</Text>
-        <Text style={styles.resultContext}>{result.insight.context}</Text>
+        <ScreenHeader title="Resumo da nota" subtitle={issuer} onBack={onScanAgain} />
+
+        <View style={styles.resultHeroCard}>
+          <Text style={styles.resultHeroLabel}>Tributos aproximados</Text>
+          <Text style={styles.resultHeroAmount} numberOfLines={1} adjustsFontSizeToFit>
+            {formatCurrency(result.computation.approximateTaxAmount)}
+          </Text>
+          <Text style={styles.resultHeroDetail}>{percent} do valor pago nesta compra.</Text>
+        </View>
 
         <View style={styles.metricGrid}>
           <Metric label="Compra" value={formatCurrency(result.computation.totalAmount)} />
-          <Metric label="Tributos" value={formatCurrency(result.computation.approximateTaxAmount)} />
           <Metric label="Peso" value={percent} />
+          <Metric label="Confiança" value={result.insight.confidenceLabel} />
         </View>
 
-        <View style={styles.confidenceBand}>
-          <Text style={styles.confidenceLabel}>{result.insight.confidenceLabel}</Text>
-          <View style={styles.confidenceTrack}>
-            <View
-              style={[
-                styles.confidenceFill,
-                result.computation.confidence === 'high' ? styles.confidenceHigh : styles.confidenceMedium,
-              ]}
-            />
-          </View>
-          <Text style={styles.methodology}>{result.insight.methodology}</Text>
+        <View style={styles.resultInfoCard}>
+          <Text style={styles.resultInfoTitle}>Como calculamos</Text>
+          <Text style={styles.resultInfoText}>{result.insight.methodology}</Text>
+          <Text style={styles.resultInfoText}>{result.insight.impact}</Text>
         </View>
-
-        <Text style={styles.impactText}>{result.insight.impact}</Text>
 
         {historyNotice ? (
           <View style={styles.noticeBox}>
@@ -335,11 +448,17 @@ function ResultScreen({
           <ShareCardPanel payload={shareCardPayload} />
         </View>
 
-        <Pressable style={styles.secondaryButton} onPress={onScanAgain}>
-          <Text style={styles.secondaryButtonText}>Escanear outra nota</Text>
+        <Pressable style={styles.primaryButton} onPress={onScanAgain}>
+          <ScanLine color="#FFFFFF" size={18} strokeWidth={2.5} />
+          <Text style={styles.primaryButtonText}>Escanear outra nota</Text>
         </Pressable>
         <Pressable style={styles.secondaryButton} onPress={onOpenHistory}>
-          <Text style={styles.secondaryButtonText}>Ver acumulados locais</Text>
+          <HistoryIcon color="#1349EC" size={18} strokeWidth={2.5} />
+          <Text style={styles.secondaryButtonText}>Ver histórico</Text>
+        </Pressable>
+        <Pressable style={styles.secondaryButton} onPress={onOpenInsights}>
+          <ChartColumn color="#1349EC" size={18} strokeWidth={2.5} />
+          <Text style={styles.secondaryButtonText}>Ver insights</Text>
         </Pressable>
       </ScrollView>
     </View>
@@ -351,58 +470,26 @@ function ShareCardPanel({ payload }: { payload: ShareCardPayload }) {
   const [shareState, setShareState] = useState<ShareState>({ status: 'idle' });
   const isBusy = shareState.status === 'sharing';
   const primaryLabel =
-    shareState.status === 'sharing' && shareState.action === 'system' ? 'Gerando card...' : 'Compartilhar imagem';
+    shareState.status === 'sharing' && shareState.action === 'system' ? 'Gerando card...' : 'Compartilhar card';
 
-  const runAction = useCallback(
-    async (action: ShareActionId) => {
+  const shareCard = useCallback(
+    async () => {
       if (isBusy) {
         return;
       }
 
-      setShareState({ status: 'sharing', action });
+      setShareState({ status: 'sharing', action: 'system' });
 
       try {
-        if (action === 'copy') {
-          await Clipboard.setStringAsync(payload.shareText);
-          setShareState({ status: 'success', message: 'Texto e link copiados.' });
-          return;
-        }
-
-        if (action === 'whatsapp') {
-          await Linking.openURL(`https://wa.me/?text=${encodeURIComponent(payload.shareText)}`);
-          setShareState({ status: 'success', message: 'Link aberto para compartilhar no WhatsApp.' });
-          return;
-        }
-
-        if (action === 'x') {
-          await Linking.openURL(`https://twitter.com/intent/tweet?text=${encodeURIComponent(payload.shareText)}`);
-          setShareState({ status: 'success', message: 'Link aberto para compartilhar no X.' });
-          return;
-        }
-
         const image = await captureShareCardImage(cardRef as ShareCardCaptureRef, payload.fileName);
-
-        if (action === 'download') {
-          await downloadShareCardImage(image);
-          setShareState({ status: 'success', message: 'Card baixado como PNG.' });
-          return;
-        }
-
         const didShare = await shareImageWithSystem(image, payload.shareText);
 
         if (didShare) {
-          setShareState({ status: 'success', message: 'Card pronto para compartilhar como imagem.' });
+          setShareState({ status: 'success', message: 'Opções de compartilhamento abertas.' });
           return;
         }
 
-        await downloadShareCardImage(image);
-        setShareState({
-          status: 'success',
-          message:
-            action === 'instagram'
-              ? 'Imagem baixada. Publique no Instagram pelo app.'
-              : 'Não deu para anexar a imagem. Baixamos o PNG.',
-        });
+        setShareState({ status: 'error', message: 'Compartilhamento indisponível neste dispositivo.' });
       } catch (error) {
         console.error('[share-card]', error);
         setShareState({
@@ -428,72 +515,13 @@ function ShareCardPanel({ payload }: { payload: ShareCardPayload }) {
 
       <Pressable
         style={[styles.primaryButton, isBusy ? styles.disabledButton : null]}
-        onPress={() => runAction('system')}
+        onPress={shareCard}
         disabled={isBusy}
       >
-        <Share2 color="#F8F4EA" size={18} strokeWidth={2.5} />
+        <Share2 color="#FFFFFF" size={18} strokeWidth={2.5} />
         <Text style={styles.primaryButtonText}>{primaryLabel}</Text>
       </Pressable>
-
-      <View style={styles.shareActionRow}>
-        <ShareActionButton
-          label="WhatsApp"
-          disabled={isBusy}
-          onPress={() => runAction('whatsapp')}
-          icon={<MessageCircle color="#111111" size={21} strokeWidth={2.4} />}
-        />
-        <ShareActionButton
-          label="Instagram"
-          disabled={isBusy}
-          onPress={() => runAction('instagram')}
-          icon={<Camera color="#111111" size={21} strokeWidth={2.4} />}
-        />
-        <ShareActionButton
-          label="X"
-          disabled={isBusy}
-          onPress={() => runAction('x')}
-          icon={<AtSign color="#111111" size={21} strokeWidth={2.4} />}
-        />
-        <ShareActionButton
-          label="Copiar"
-          disabled={isBusy}
-          onPress={() => runAction('copy')}
-          icon={<Copy color="#111111" size={21} strokeWidth={2.4} />}
-        />
-        <ShareActionButton
-          label="Download"
-          disabled={isBusy}
-          onPress={() => runAction('download')}
-          icon={<Download color="#111111" size={21} strokeWidth={2.4} />}
-        />
-      </View>
     </View>
-  );
-}
-
-function ShareActionButton({
-  label,
-  icon,
-  disabled,
-  onPress,
-}: {
-  label: string;
-  icon: ReactNode;
-  disabled: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityLabel={label}
-      style={[styles.shareActionButton, disabled ? styles.disabledShareActionButton : null]}
-      onPress={onPress}
-      disabled={disabled}
-    >
-      <View style={styles.shareActionIcon}>{icon}</View>
-      <Text style={styles.shareActionLabel} numberOfLines={1} adjustsFontSizeToFit>
-        {label}
-      </Text>
-    </Pressable>
   );
 }
 
@@ -504,18 +532,20 @@ function ShareCardPreview({
   payload: ShareCardPayload;
   cardRef: ShareCardCaptureRef;
 }) {
+  const visibleRows = payload.statRows.slice(0, 2);
+
   return (
     <View style={styles.sharePreviewFrame}>
       <View ref={cardRef} collapsable={false} style={styles.shareCard}>
         <View style={styles.shareCardHeader}>
           <Text style={styles.shareCardBrand}>{payload.brand}</Text>
           <View style={styles.shareCardPill}>
-            <Text style={styles.shareCardPillText}>OPEN SOURCE</Text>
+            <Text style={styles.shareCardPillText}>{payload.eyebrow}</Text>
           </View>
         </View>
 
         <View style={styles.shareCardMain}>
-          <Text style={styles.shareCardEyebrow}>{payload.eyebrow}</Text>
+          {payload.primaryIntro ? <Text style={styles.shareCardIntro}>{payload.primaryIntro}</Text> : null}
           <Text style={styles.shareCardAmount} numberOfLines={1} adjustsFontSizeToFit>
             {payload.primaryAmount}
           </Text>
@@ -523,7 +553,7 @@ function ShareCardPreview({
         </View>
 
         <View style={styles.shareCardStats}>
-          {payload.statRows.map((row) => (
+          {visibleRows.map((row) => (
             <View key={row.label} style={styles.shareCardStatRow}>
               <Text style={styles.shareCardStatLabel}>{row.label}</Text>
               <Text style={styles.shareCardStatValue}>{row.value}</Text>
@@ -531,16 +561,8 @@ function ShareCardPreview({
           ))}
         </View>
 
-        <View style={styles.shareCardMethodology}>
-          <Text style={styles.shareCardMethodologyText} numberOfLines={2}>
-            {payload.note}
-          </Text>
-        </View>
-
         <View style={styles.shareCardFooter}>
-          <Text style={styles.shareCardCta}>{payload.cta}</Text>
           <Text style={styles.shareCardUrl}>{payload.url}</Text>
-          <Text style={styles.shareCardSignature}>{payload.signature}</Text>
         </View>
       </View>
     </View>
@@ -549,22 +571,16 @@ function ShareCardPreview({
 
 function HistoryScreen({
   entries,
-  onBack,
+  onSelectTab,
   onClear,
   onRemoveEntry,
 }: {
   entries: ScanHistoryEntry[];
-  onBack: () => void;
+  onSelectTab: (tab: MainTab) => void;
   onClear: () => void;
   onRemoveEntry: (id: string) => void;
 }) {
   const insets = useSafeAreaInsets();
-  const summaries = useMemo(() => summarizeScanHistory(entries), [entries]);
-  const latestEntries = entries.slice(0, 6);
-  const [selectedSummaryPayload, setSelectedSummaryPayload] = useState<ShareCardPayload | null>(null);
-  const openSummaryCard = useCallback((periodKey: SharePeriodKey, summary: HistorySummary) => {
-    setSelectedSummaryPayload(buildSummaryShareCardPayload(periodKey, summary));
-  }, []);
 
   return (
     <View style={styles.resultScreen}>
@@ -574,51 +590,24 @@ function HistoryScreen({
           styles.historyContent,
           {
             paddingTop: Math.max(insets.top + 16, 32),
-            paddingBottom: Math.max(insets.bottom + 34, 64),
+            paddingBottom: Math.max(insets.bottom + 112, 132),
           },
         ]}
       >
-        <View style={styles.historyTopBar}>
-          <Text style={styles.brand}>QR Imposto</Text>
-          <Pressable style={styles.secondaryButtonSmall} onPress={onBack}>
-            <Text style={styles.secondaryButtonText}>Voltar</Text>
-          </Pressable>
-        </View>
+        <ScreenHeader
+          title="Histórico"
+          subtitle="NFC-es salvas somente neste dispositivo. Sem login, sem sincronização em nuvem."
+          onBack={() => onSelectTab('scanner')}
+        />
 
-        <Text style={styles.historyTitle}>Seus tributos aproximados</Text>
-        <Text style={styles.historyText}>
-          Histórico salvo somente neste dispositivo. Sem login, sem sincronização em nuvem.
-        </Text>
-
-        <View style={styles.summaryGrid}>
-          <SummaryCard label="Hoje" summary={summaries.today} onPress={() => openSummaryCard('today', summaries.today)} />
-          <SummaryCard label="Semana" summary={summaries.week} onPress={() => openSummaryCard('week', summaries.week)} />
-          <SummaryCard label="Mês" summary={summaries.month} onPress={() => openSummaryCard('month', summaries.month)} />
-          <SummaryCard label="Ano" summary={summaries.year} onPress={() => openSummaryCard('year', summaries.year)} />
-          <SummaryCard label="Total local" summary={summaries.all} wide />
-        </View>
-
-        {latestEntries.length > 0 ? (
+        {entries.length > 0 ? (
           <View style={styles.latestSection}>
-            <Text style={styles.sectionTitle}>Leituras recentes</Text>
-            {latestEntries.map((entry) => (
-              <View key={entry.id} style={styles.historyItem}>
-                <View style={styles.historyItemHeader}>
-                  <Text style={styles.historyItemTitle} numberOfLines={1}>
-                    {entry.issuerName ?? 'Estabelecimento não identificado'}
-                  </Text>
-                  <Text style={styles.historyItemDate}>{formatHistoryDate(entry.scannedAt)}</Text>
-                </View>
-                <View style={styles.historyItemFooter}>
-                  <Text style={styles.historyItemDetail}>
-                    {formatCurrency(entry.approximateTaxAmount)} de {formatCurrency(entry.totalAmount)} -{' '}
-                    {formatPercentage(entry.percentage)}
-                  </Text>
-                  <Pressable style={styles.removeButton} onPress={() => onRemoveEntry(entry.id)}>
-                    <Text style={styles.removeButtonText}>Remover</Text>
-                  </Pressable>
-                </View>
-              </View>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Notas escaneadas</Text>
+              <Text style={styles.sectionCount}>{entries.length} leituras</Text>
+            </View>
+            {entries.map((entry) => (
+              <HistoryEntryCard key={entry.id} entry={entry} onRemove={() => onRemoveEntry(entry.id)} />
             ))}
           </View>
         ) : (
@@ -634,6 +623,62 @@ function HistoryScreen({
           </Pressable>
         ) : null}
       </ScrollView>
+      <BottomTabBar activeTab="history" bottomInset={insets.bottom} onSelectTab={onSelectTab} />
+    </View>
+  );
+}
+
+function InsightsScreen({ entries, onSelectTab }: { entries: ScanHistoryEntry[]; onSelectTab: (tab: MainTab) => void }) {
+  const insets = useSafeAreaInsets();
+  const now = useMemo(() => new Date(), [entries]);
+  const summaries = useMemo(() => summarizeScanHistory(entries, now), [entries, now]);
+  const weeklySeries = useMemo(() => buildWeeklyTaxSeries(entries, now), [entries, now]);
+  const monthlySeries = useMemo(() => buildMonthlyTaxSeries(entries, now), [entries, now]);
+  const yearlySeries = useMemo(() => buildYearlyTaxSeries(entries, now), [entries, now]);
+  const [selectedSummaryPayload, setSelectedSummaryPayload] = useState<ShareCardPayload | null>(null);
+  const openSummaryCard = useCallback((periodKey: SharePeriodKey, summary: HistorySummary) => {
+    setSelectedSummaryPayload(buildSummaryShareCardPayload(periodKey, summary));
+  }, []);
+
+  return (
+    <View style={styles.resultScreen}>
+      <StatusBar style="dark" />
+      <ScrollView
+        contentContainerStyle={[
+          styles.insightsContent,
+          {
+            paddingTop: Math.max(insets.top + 16, 32),
+            paddingBottom: Math.max(insets.bottom + 112, 132),
+          },
+        ]}
+      >
+        <ScreenHeader
+          title="Insights"
+          subtitle="Evolução dos tributos aproximados nas NFC-es lidas neste aparelho."
+          onBack={() => onSelectTab('scanner')}
+        />
+
+        <TodayTotalCard summary={summaries.today} onPress={() => openSummaryCard('today', summaries.today)} />
+
+        <View style={styles.periodGrid}>
+          <PeriodInsightCard label="Semana" summary={summaries.week} onPress={() => openSummaryCard('week', summaries.week)} />
+          <PeriodInsightCard label="Mês" summary={summaries.month} onPress={() => openSummaryCard('month', summaries.month)} />
+          <PeriodInsightCard label="Ano" summary={summaries.year} onPress={() => openSummaryCard('year', summaries.year)} />
+        </View>
+
+        <TaxEvolutionCard title="Evolução dos tributos na semana" subtitle="Dia a dia da semana atual" series={weeklySeries} />
+        <TaxEvolutionCard title="Evolução dos tributos no mês" subtitle="Dia a dia do mês atual" series={monthlySeries} />
+        <TaxEvolutionCard title="Evolução dos tributos no ano" subtitle="Mês a mês do ano atual" series={yearlySeries} />
+
+        <View style={styles.methodologyCard}>
+          <Text style={styles.methodologyTitle}>Metodologia</Text>
+          <Text style={styles.methodologyBody}>
+            Os valores são aproximados e calculados a partir das NFC-es lidas localmente. O histórico não é enviado para
+            servidor e pode variar conforme os dados públicos disponíveis em cada nota.
+          </Text>
+        </View>
+      </ScrollView>
+      <BottomTabBar activeTab="insights" bottomInset={insets.bottom} onSelectTab={onSelectTab} />
       <Modal
         animationType="slide"
         transparent
@@ -658,45 +703,159 @@ function HistoryScreen({
   );
 }
 
-function SummaryCard({
-  label,
-  summary,
-  wide = false,
-  onPress,
-}: {
-  label: string;
-  summary: HistorySummary;
-  wide?: boolean;
-  onPress?: () => void;
-}) {
-  const countLabel = summary.count === 1 ? 'nota' : 'notas';
-  const content = (
-    <>
-      <Text style={styles.metricLabel}>{label}</Text>
-      <Text style={styles.summaryValue} numberOfLines={1} adjustsFontSizeToFit>
-        {formatCurrency(summary.approximateTaxAmount)}
-      </Text>
-      <Text style={styles.summaryDetail}>
-        {summary.count} {countLabel} - {formatPercentage(summary.percentage)}
-      </Text>
-    </>
-  );
-
-  if (onPress) {
-    return (
-      <Pressable
-        accessibilityRole="button"
-        style={[styles.summaryCard, wide ? styles.summaryCardWide : null, styles.summaryCardPressable]}
-        onPress={onPress}
-      >
-        {content}
+function ScreenHeader({ title, subtitle, onBack }: { title: string; subtitle: string; onBack: () => void }) {
+  return (
+    <View style={styles.screenHeader}>
+      <View style={styles.screenHeaderText}>
+        <Text style={styles.brand}>QR Imposto</Text>
+        <Text style={styles.historyTitle}>{title}</Text>
+        <Text style={styles.historyText}>{subtitle}</Text>
+      </View>
+      <Pressable accessibilityRole="button" accessibilityLabel="Voltar ao scanner" style={styles.iconButton} onPress={onBack}>
+        <ArrowLeft color="#111111" size={22} strokeWidth={2.5} />
       </Pressable>
-    );
-  }
+    </View>
+  );
+}
+
+function HistoryEntryCard({ entry, onRemove }: { entry: ScanHistoryEntry; onRemove: () => void }) {
+  return (
+    <View style={styles.historyItem}>
+      <View style={styles.historyItemHeader}>
+        <View style={styles.historyItemTitleGroup}>
+          <Text style={styles.historyItemTitle} numberOfLines={1}>
+            {entry.issuerName ?? 'Estabelecimento não identificado'}
+          </Text>
+          <Text style={styles.historyItemDate}>{formatHistoryDate(entry.scannedAt)}</Text>
+        </View>
+        <Pressable accessibilityRole="button" accessibilityLabel="Remover leitura" style={styles.removeIconButton} onPress={onRemove}>
+          <Trash2 color="#8A2E2E" size={18} strokeWidth={2.4} />
+        </Pressable>
+      </View>
+      <View style={styles.historyItemMetrics}>
+        <HistoryMetric label="Impostos" value={formatCurrency(entry.approximateTaxAmount)} highlight />
+        <HistoryMetric label="Compra" value={formatCurrency(entry.totalAmount)} />
+        <HistoryMetric label="Peso" value={formatPercentage(entry.percentage)} />
+      </View>
+      <Text style={styles.historyItemDetail}>{formatConfidenceLabel(entry.confidence)}</Text>
+    </View>
+  );
+}
+
+function HistoryMetric({ label, value, highlight = false }: { label: string; value: string; highlight?: boolean }) {
+  return (
+    <View style={styles.historyMetric}>
+      <Text style={styles.historyMetricLabel}>{label}</Text>
+      <Text
+        style={[styles.historyMetricValue, highlight ? styles.historyMetricValueHighlight : null]}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+      >
+        {value}
+      </Text>
+    </View>
+  );
+}
+
+function TodayTotalCard({ summary, onPress }: { summary: HistorySummary; onPress: () => void }) {
+  const countLabel = summary.count === 1 ? 'nota' : 'notas';
 
   return (
-    <View style={[styles.summaryCard, wide ? styles.summaryCardWide : null]}>
-      {content}
+    <Pressable accessibilityRole="button" style={styles.todayCard} onPress={onPress}>
+      <View style={styles.todayCardHeader}>
+        <Text style={styles.todayCardLabel}>Total do dia</Text>
+        <View style={styles.todayCardAction}>
+          <Share2 color="#F8F4EA" size={16} strokeWidth={2.4} />
+          <Text style={styles.todayCardActionText}>Card</Text>
+        </View>
+      </View>
+      <Text style={styles.todayCardValue} numberOfLines={1} adjustsFontSizeToFit>
+        {formatCurrency(summary.approximateTaxAmount)}
+      </Text>
+      <Text style={styles.todayCardDetail}>
+        {summary.count} {countLabel} • {formatPercentage(summary.percentage)} do valor pago
+      </Text>
+    </Pressable>
+  );
+}
+
+function PeriodInsightCard({ label, summary, onPress }: { label: string; summary: HistorySummary; onPress: () => void }) {
+  const countLabel = summary.count === 1 ? 'nota' : 'notas';
+
+  return (
+    <Pressable accessibilityRole="button" style={styles.periodCard} onPress={onPress}>
+      <Text style={styles.metricLabel}>{label}</Text>
+      <Text style={styles.periodCardValue} numberOfLines={1} adjustsFontSizeToFit>
+        {formatCurrency(summary.approximateTaxAmount)}
+      </Text>
+      <Text style={styles.periodCardDetail}>
+        {summary.count} {countLabel} - {formatPercentage(summary.percentage)}
+      </Text>
+    </Pressable>
+  );
+}
+
+function TaxEvolutionCard({
+  title,
+  subtitle,
+  series,
+}: {
+  title: string;
+  subtitle: string;
+  series: HistorySeriesPoint[];
+}) {
+  const totalTax = series.reduce((total, point) => total + point.approximateTaxAmount, 0);
+  const totalCount = series.reduce((total, point) => total + point.count, 0);
+  const countLabel = totalCount === 1 ? 'nota' : 'notas';
+
+  return (
+    <View style={styles.chartCard}>
+      <View style={styles.chartCardHeader}>
+        <View style={styles.chartCardTitleGroup}>
+          <Text style={styles.chartCardTitle}>{title}</Text>
+          <Text style={styles.chartCardSubtitle}>{subtitle}</Text>
+        </View>
+        <View style={styles.chartTotalPill}>
+          <Text style={styles.chartTotalText}>{formatCurrency(totalTax)}</Text>
+        </View>
+      </View>
+      <TaxLineChart series={series} />
+      <Text style={styles.chartCardFooter}>
+        {totalCount} {countLabel} no período
+      </Text>
+    </View>
+  );
+}
+
+function TaxLineChart({ series }: { series: HistorySeriesPoint[] }) {
+  const chartPoints = buildChartPoints(series);
+  const linePath = buildLinePath(chartPoints);
+  const areaPath = buildAreaPath(chartPoints);
+  const labels = buildChartLabels(series);
+  const hasValues = series.some((point) => point.approximateTaxAmount > 0);
+
+  return (
+    <View style={styles.chartBox}>
+      <Svg width="100%" height={132} viewBox="0 0 320 132">
+        <Path d="M 16 108 H 304" stroke="#D9E0EF" strokeWidth={1} />
+        <Path d="M 16 72 H 304" stroke="#EEF2F8" strokeWidth={1} />
+        <Path d="M 16 36 H 304" stroke="#EEF2F8" strokeWidth={1} />
+        {areaPath ? <Path d={areaPath} fill="#EAF0FF" /> : null}
+        {linePath ? <Path d={linePath} fill="none" stroke="#1349EC" strokeWidth={4} strokeLinecap="round" strokeLinejoin="round" /> : null}
+        {chartPoints
+          .filter((point) => series.length <= 12 || point.index === 0 || point.index === series.length - 1 || point.value > 0)
+          .map((point) => (
+            <Circle key={`${point.index}-${point.x}`} cx={point.x} cy={point.y} r={4} fill={point.value > 0 ? '#1349EC' : '#AEB8CB'} />
+          ))}
+      </Svg>
+      <View style={styles.chartAxisLabels}>
+        {labels.map((label) => (
+          <Text key={label} style={styles.chartAxisLabel}>
+            {label}
+          </Text>
+        ))}
+      </View>
+      {!hasValues ? <Text style={styles.chartEmptyText}>Sem leituras neste período.</Text> : null}
     </View>
   );
 }
@@ -775,6 +934,62 @@ function formatHistoryDate(input: string): string {
   });
 }
 
+type ChartPoint = {
+  index: number;
+  value: number;
+  x: number;
+  y: number;
+};
+
+function buildChartPoints(series: HistorySeriesPoint[]): ChartPoint[] {
+  const left = 16;
+  const right = 304;
+  const top = 18;
+  const bottom = 108;
+  const maxValue = Math.max(...series.map((point) => point.approximateTaxAmount), 1);
+  const divisor = Math.max(series.length - 1, 1);
+
+  return series.map((point, index) => {
+    const x = series.length === 1 ? (left + right) / 2 : left + ((right - left) * index) / divisor;
+    const ratio = point.approximateTaxAmount / maxValue;
+    const y = bottom - (bottom - top) * ratio;
+
+    return {
+      index,
+      value: point.approximateTaxAmount,
+      x,
+      y,
+    };
+  });
+}
+
+function buildLinePath(points: ChartPoint[]): string {
+  return points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`).join(' ');
+}
+
+function buildAreaPath(points: ChartPoint[]): string {
+  if (points.length === 0) {
+    return '';
+  }
+
+  const bottom = 108;
+  const linePath = buildLinePath(points);
+  const first = points[0];
+  const last = points[points.length - 1];
+
+  return `${linePath} L ${last.x.toFixed(2)} ${bottom} L ${first.x.toFixed(2)} ${bottom} Z`;
+}
+
+function buildChartLabels(series: HistorySeriesPoint[]): string[] {
+  if (series.length === 0) {
+    return [];
+  }
+
+  const middle = series[Math.floor((series.length - 1) / 2)]?.label;
+  const labels = [series[0]?.label, middle, series[series.length - 1]?.label].filter(Boolean) as string[];
+  return Array.from(new Set(labels));
+}
+
 const styles = StyleSheet.create({
   scannerScreen: {
     flex: 1,
@@ -806,16 +1021,18 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 0,
   },
-  lightButton: {
+  scannerModePill: {
     minHeight: 38,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#F8F4EA',
+    borderColor: 'rgba(248, 244, 234, 0.72)',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 7,
     paddingHorizontal: 12,
   },
-  lightButtonText: {
+  scannerModeText: {
     color: '#F8F4EA',
     fontSize: 14,
     fontWeight: '800',
@@ -891,9 +1108,49 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
   },
+  bottomTabBar: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    minHeight: 72,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    padding: 6,
+    gap: 6,
+  },
+  bottomTabBarDark: {
+    backgroundColor: '#0F33B5',
+    borderColor: 'rgba(248, 244, 234, 0.2)',
+  },
+  bottomTabBarLight: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#D9E0EF',
+  },
+  bottomTabButton: {
+    flex: 1,
+    minWidth: 0,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  bottomTabButtonActiveDark: {
+    backgroundColor: '#3154D4',
+  },
+  bottomTabButtonActiveLight: {
+    backgroundColor: '#ECF2FF',
+  },
+  bottomTabLabel: {
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: '900',
+    letterSpacing: 0,
+  },
   permissionScreen: {
     flex: 1,
-    backgroundColor: '#F8F4EA',
+    backgroundColor: '#F6F8FE',
   },
   permissionContent: {
     flex: 1,
@@ -924,14 +1181,14 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
   },
   permissionText: {
-    color: '#3E3A33',
+    color: '#5D6472',
     fontSize: 16,
     lineHeight: 23,
   },
   primaryButton: {
     minHeight: 54,
     borderRadius: 8,
-    backgroundColor: '#111111',
+    backgroundColor: '#1349EC',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -940,7 +1197,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   primaryButtonText: {
-    color: '#F8F4EA',
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '800',
   },
@@ -951,52 +1208,84 @@ const styles = StyleSheet.create({
     minHeight: 54,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#111111',
+    borderColor: '#C9D4EA',
+    backgroundColor: '#FFFFFF',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 8,
     paddingHorizontal: 18,
   },
   secondaryButtonSmall: {
     minHeight: 38,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#111111',
+    borderColor: '#C9D4EA',
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 12,
   },
   secondaryButtonText: {
-    color: '#111111',
+    color: '#1349EC',
     fontSize: 15,
     fontWeight: '800',
   },
   resultScreen: {
     flex: 1,
-    backgroundColor: '#F8F4EA',
+    backgroundColor: '#F6F8FE',
   },
   resultContent: {
     padding: 24,
-    gap: 18,
+    gap: 16,
   },
-  resultEyebrow: {
-    color: '#4E6B4F',
-    fontSize: 14,
-    fontWeight: '800',
+  resultHeroCard: {
+    minHeight: 188,
+    borderRadius: 8,
+    backgroundColor: '#1349EC',
+    padding: 18,
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  resultHeroLabel: {
+    color: '#D9E3FF',
+    fontSize: 13,
+    fontWeight: '900',
     textTransform: 'uppercase',
     letterSpacing: 0,
-    marginTop: 18,
   },
-  resultTitle: {
-    color: '#111111',
-    fontSize: 42,
-    lineHeight: 46,
+  resultHeroAmount: {
+    color: '#FFFFFF',
+    fontSize: 50,
+    lineHeight: 58,
     fontWeight: '900',
     letterSpacing: 0,
   },
-  resultContext: {
-    color: '#3E3A33',
-    fontSize: 20,
-    lineHeight: 28,
+  resultHeroDetail: {
+    color: '#EAF0FF',
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: '800',
+  },
+  resultInfoCard: {
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#D9E0EF',
+    padding: 14,
+    gap: 8,
+  },
+  resultInfoTitle: {
+    color: '#111111',
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: '900',
+    letterSpacing: 0,
+  },
+  resultInfoText: {
+    color: '#5D6472',
+    fontSize: 14,
+    lineHeight: 20,
     fontWeight: '700',
   },
   metricGrid: {
@@ -1009,72 +1298,32 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E2DAC7',
+    borderColor: '#D9E0EF',
     padding: 12,
     justifyContent: 'space-between',
   },
   metricLabel: {
-    color: '#6B6254',
+    color: '#6B7280',
     fontSize: 12,
     fontWeight: '800',
     textTransform: 'uppercase',
     letterSpacing: 0,
   },
   metricValue: {
-    color: '#111111',
-    fontSize: 22,
+    color: '#1349EC',
+    fontSize: 20,
     fontWeight: '900',
     letterSpacing: 0,
   },
-  confidenceBand: {
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: '#D8CFBA',
-    paddingVertical: 16,
-    gap: 10,
-  },
-  confidenceLabel: {
-    color: '#111111',
-    fontSize: 16,
-    fontWeight: '900',
-  },
-  confidenceTrack: {
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#D8CFBA',
-    overflow: 'hidden',
-  },
-  confidenceFill: {
-    height: '100%',
-    borderRadius: 5,
-  },
-  confidenceHigh: {
-    width: '100%',
-    backgroundColor: '#2F7D4F',
-  },
-  confidenceMedium: {
-    width: '66%',
-    backgroundColor: '#C77D2A',
-  },
-  methodology: {
-    color: '#5D5548',
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  impactText: {
-    color: '#3E3A33',
-    fontSize: 16,
-    lineHeight: 23,
-  },
   noticeBox: {
     borderRadius: 8,
-    backgroundColor: '#EFE6CF',
+    backgroundColor: '#ECF2FF',
     borderWidth: 1,
-    borderColor: '#D8CFBA',
+    borderColor: '#D9E0EF',
     padding: 12,
   },
   noticeText: {
-    color: '#3E3A33',
+    color: '#1349EC',
     fontSize: 14,
     lineHeight: 20,
     fontWeight: '800',
@@ -1102,51 +1351,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 8,
   },
-  shareActionRow: {
-    minHeight: 70,
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    justifyContent: 'space-between',
-    gap: 6,
-  },
-  shareActionButton: {
-    flex: 1,
-    minWidth: 0,
-    minHeight: 66,
-    borderRadius: 8,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2DAC7',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 4,
-    gap: 5,
-  },
-  disabledShareActionButton: {
-    opacity: 0.58,
-  },
-  shareActionIcon: {
-    width: 26,
-    height: 26,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  shareActionLabel: {
-    color: '#111111',
-    fontSize: 10,
-    lineHeight: 13,
-    fontWeight: '900',
-    letterSpacing: 0,
-  },
   shareCard: {
     width: '100%',
     maxWidth: 320,
     aspectRatio: 9 / 16,
     borderRadius: 8,
-    backgroundColor: '#151515',
+    backgroundColor: '#1349EC',
     borderWidth: 1,
-    borderColor: '#2F7D4F',
-    padding: 20,
+    borderColor: '#0F33B5',
+    padding: 22,
     justifyContent: 'space-between',
   },
   shareCardHeader: {
@@ -1157,7 +1370,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   shareCardBrand: {
-    color: '#F8F4EA',
+    color: '#FFFFFF',
     fontSize: 18,
     fontWeight: '900',
     letterSpacing: 0,
@@ -1166,106 +1379,101 @@ const styles = StyleSheet.create({
     minHeight: 26,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#F6C453',
+    borderColor: 'rgba(255, 255, 255, 0.42)',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 9,
   },
   shareCardPillText: {
-    color: '#F6C453',
+    color: '#FFFFFF',
     fontSize: 10,
     fontWeight: '900',
     letterSpacing: 0,
   },
   shareCardMain: {
-    gap: 7,
+    gap: 8,
   },
-  shareCardEyebrow: {
-    color: '#A7D7AF',
-    fontSize: 15,
-    fontWeight: '900',
-    textTransform: 'uppercase',
-    letterSpacing: 0,
-  },
-  shareCardAmount: {
-    color: '#F8F4EA',
-    fontSize: 48,
-    lineHeight: 54,
-    fontWeight: '900',
-    letterSpacing: 0,
-  },
-  shareCardTaxLabel: {
-    color: '#F6C453',
-    fontSize: 25,
+  shareCardIntro: {
+    color: '#EAF0FF',
+    fontSize: 24,
     lineHeight: 30,
     fontWeight: '900',
     letterSpacing: 0,
   },
+  shareCardAmount: {
+    color: '#FFFFFF',
+    fontSize: 52,
+    lineHeight: 58,
+    fontWeight: '900',
+    letterSpacing: 0,
+  },
+  shareCardTaxLabel: {
+    color: '#EAF0FF',
+    fontSize: 23,
+    lineHeight: 29,
+    fontWeight: '900',
+    letterSpacing: 0,
+  },
   shareCardStats: {
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: '#355F40',
+    gap: 10,
   },
   shareCardStatRow: {
-    minHeight: 52,
+    minHeight: 58,
     justifyContent: 'center',
-    borderTopWidth: 1,
-    borderTopColor: '#243F2B',
-    gap: 3,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    paddingHorizontal: 12,
+    gap: 4,
   },
   shareCardStatLabel: {
-    color: '#A7D7AF',
+    color: '#B7C5FF',
     fontSize: 11,
     fontWeight: '900',
     textTransform: 'uppercase',
     letterSpacing: 0,
   },
   shareCardStatValue: {
-    color: '#F8F4EA',
-    fontSize: 16,
-    lineHeight: 20,
-    fontWeight: '800',
-  },
-  shareCardMethodology: {
-    minHeight: 48,
-    justifyContent: 'center',
-  },
-  shareCardMethodologyText: {
-    color: '#D8CFBA',
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: '700',
+    color: '#FFFFFF',
+    fontSize: 18,
+    lineHeight: 22,
+    fontWeight: '900',
   },
   shareCardFooter: {
     gap: 6,
   },
-  shareCardCta: {
-    color: '#F8F4EA',
-    fontSize: 18,
-    lineHeight: 23,
-    fontWeight: '900',
-  },
   shareCardUrl: {
-    color: '#F6C453',
+    color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '900',
-  },
-  shareCardSignature: {
-    color: '#A7D7AF',
-    fontSize: 11,
-    lineHeight: 15,
-    fontWeight: '800',
   },
   historyContent: {
     padding: 24,
     gap: 18,
   },
-  historyTopBar: {
-    minHeight: 44,
+  insightsContent: {
+    padding: 24,
+    gap: 16,
+  },
+  screenHeader: {
+    minHeight: 120,
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
-    gap: 12,
+    gap: 14,
+  },
+  screenHeaderText: {
+    flex: 1,
+    gap: 8,
+  },
+  iconButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#C9D4EA',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   historyTitle: {
     color: '#111111',
@@ -1275,42 +1483,182 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
   },
   historyText: {
-    color: '#3E3A33',
+    color: '#5D6472',
     fontSize: 15,
     lineHeight: 22,
   },
-  summaryGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  summaryCard: {
-    flexGrow: 1,
-    flexBasis: '47%',
-    minHeight: 112,
+  todayCard: {
+    minHeight: 190,
     borderRadius: 8,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2DAC7',
-    padding: 12,
+    backgroundColor: '#1349EC',
+    padding: 18,
     justifyContent: 'space-between',
+    gap: 14,
   },
-  summaryCardPressable: {
-    borderColor: '#111111',
+  todayCardHeader: {
+    minHeight: 34,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
   },
-  summaryCardWide: {
-    flexBasis: '100%',
+  todayCardLabel: {
+    color: '#F8F4EA',
+    fontSize: 14,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+    letterSpacing: 0,
   },
-  summaryValue: {
-    color: '#111111',
-    fontSize: 25,
+  todayCardAction: {
+    minHeight: 30,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(248, 244, 234, 0.42)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+  },
+  todayCardActionText: {
+    color: '#F8F4EA',
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  todayCardValue: {
+    color: '#F8F4EA',
+    fontSize: 46,
+    lineHeight: 54,
     fontWeight: '900',
     letterSpacing: 0,
   },
-  summaryDetail: {
-    color: '#5D5548',
-    fontSize: 13,
-    lineHeight: 18,
+  todayCardDetail: {
+    color: '#D9E3FF',
+    fontSize: 15,
+    lineHeight: 21,
+    fontWeight: '800',
+  },
+  periodGrid: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  periodCard: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 104,
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#D9E0EF',
+    padding: 12,
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  periodCardValue: {
+    color: '#111111',
+    fontSize: 19,
+    fontWeight: '900',
+    letterSpacing: 0,
+  },
+  periodCardDetail: {
+    color: '#5D6472',
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: '800',
+  },
+  chartCard: {
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#D9E0EF',
+    padding: 14,
+    gap: 12,
+  },
+  chartCardHeader: {
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  chartCardTitleGroup: {
+    flex: 1,
+    gap: 3,
+  },
+  chartCardTitle: {
+    color: '#111111',
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: '900',
+    letterSpacing: 0,
+  },
+  chartCardSubtitle: {
+    color: '#5D6472',
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '700',
+  },
+  chartTotalPill: {
+    minHeight: 30,
+    maxWidth: 116,
+    borderRadius: 8,
+    backgroundColor: '#ECF2FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 9,
+  },
+  chartTotalText: {
+    color: '#1349EC',
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  chartBox: {
+    minHeight: 164,
+    gap: 6,
+  },
+  chartAxisLabels: {
+    minHeight: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  chartAxisLabel: {
+    color: '#7A8191',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  chartEmptyText: {
+    color: '#7A8191',
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  chartCardFooter: {
+    color: '#5D6472',
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: '800',
+  },
+  methodologyCard: {
+    borderRadius: 8,
+    backgroundColor: '#EEF4F1',
+    borderWidth: 1,
+    borderColor: '#C9DCD1',
+    padding: 14,
+    gap: 7,
+  },
+  methodologyTitle: {
+    color: '#111111',
+    fontSize: 16,
+    lineHeight: 21,
+    fontWeight: '900',
+  },
+  methodologyBody: {
+    color: '#3E4B43',
+    fontSize: 14,
+    lineHeight: 20,
     fontWeight: '700',
   },
   shareModalBackdrop: {
@@ -1322,7 +1670,7 @@ const styles = StyleSheet.create({
     maxHeight: '92%',
     borderTopLeftRadius: 8,
     borderTopRightRadius: 8,
-    backgroundColor: '#F8F4EA',
+    backgroundColor: '#F6F8FE',
     padding: 18,
     gap: 12,
   },
@@ -1348,26 +1696,44 @@ const styles = StyleSheet.create({
   latestSection: {
     gap: 10,
   },
+  sectionHeader: {
+    minHeight: 30,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
   sectionTitle: {
     color: '#111111',
     fontSize: 18,
     lineHeight: 24,
     fontWeight: '900',
   },
+  sectionCount: {
+    color: '#1349EC',
+    fontSize: 12,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+    letterSpacing: 0,
+  },
   historyItem: {
-    minHeight: 82,
+    minHeight: 138,
     borderRadius: 8,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E2DAC7',
-    padding: 12,
-    gap: 8,
+    borderColor: '#D9E0EF',
+    padding: 14,
+    gap: 12,
   },
   historyItemHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 10,
+  },
+  historyItemTitleGroup: {
+    flex: 1,
+    gap: 4,
   },
   historyItemTitle: {
     flex: 1,
@@ -1376,42 +1742,64 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   historyItemDate: {
-    color: '#6B6254',
+    color: '#6B7280',
     fontSize: 12,
     fontWeight: '800',
   },
   historyItemDetail: {
     flex: 1,
-    color: '#3E3A33',
-    fontSize: 14,
-    lineHeight: 20,
+    color: '#5D6472',
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '700',
   },
-  historyItemFooter: {
-    minHeight: 32,
+  historyItemMetrics: {
+    minHeight: 58,
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
+    gap: 8,
   },
-  removeButton: {
-    minHeight: 32,
+  historyMetric: {
+    flex: 1,
+    minWidth: 0,
+    borderRadius: 8,
+    backgroundColor: '#F4F7FE',
+    padding: 9,
+    justifyContent: 'space-between',
+    gap: 4,
+  },
+  historyMetricLabel: {
+    color: '#6B7280',
+    fontSize: 10,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+    letterSpacing: 0,
+  },
+  historyMetricValue: {
+    color: '#111111',
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: '900',
+    letterSpacing: 0,
+  },
+  historyMetricValueHighlight: {
+    color: '#1349EC',
+  },
+  removeIconButton: {
+    width: 38,
+    height: 38,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#8A2E2E',
+    borderColor: '#E6C2C2',
+    backgroundColor: '#FFF7F7',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 10,
-  },
-  removeButtonText: {
-    color: '#8A2E2E',
-    fontSize: 12,
-    fontWeight: '900',
   },
   emptyHistory: {
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: '#D8CFBA',
-    paddingVertical: 18,
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#D9E0EF',
+    padding: 16,
     gap: 8,
   },
   dangerButton: {
@@ -1430,7 +1818,7 @@ const styles = StyleSheet.create({
   },
   errorScreen: {
     flex: 1,
-    backgroundColor: '#F8F4EA',
+    backgroundColor: '#F6F8FE',
   },
   errorContent: {
     flex: 1,

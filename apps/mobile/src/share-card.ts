@@ -15,6 +15,7 @@ export type ShareCardPayload = {
   kind: ShareCardKind;
   brand: string;
   eyebrow: string;
+  primaryIntro?: string;
   primaryAmount: string;
   primaryLabel: string;
   statRows: ShareCardStat[];
@@ -30,7 +31,7 @@ export type ShareCardPayload = {
 const SHARE_CARD_BRAND = 'QR Imposto';
 const SHARE_CARD_DISPLAY_URL = 'qr.richardwollyce.com';
 export const SHARE_CARD_APP_URL = `https://${SHARE_CARD_DISPLAY_URL}`;
-export const SHARE_CARD_SIGNATURE = 'Open-source • Desenvolvido por Richard Wollyce';
+export const SHARE_CARD_SIGNATURE = SHARE_CARD_DISPLAY_URL;
 
 const PERIOD_LABELS: Record<SharePeriodKey, { eyebrow: string; text: string; slug: string }> = {
   today: { eyebrow: 'Hoje', text: 'Hoje', slug: 'hoje' },
@@ -58,7 +59,6 @@ export function buildScanShareCardPayload(result: SuccessfulScan, now = new Date
     statRows: [
       { label: 'Compra', value: totalAmount },
       { label: 'Peso', value: `${percentage} do valor pago` },
-      { label: 'Confiança', value: result.insight.confidenceLabel },
     ],
     note: result.insight.methodology,
     cta: 'Veja quanto imposto existe nas suas compras',
@@ -77,11 +77,10 @@ export function buildSummaryShareCardPayload(
 ): ShareCardPayload {
   const period = PERIOD_LABELS[periodKey];
   const taxAmount = formatCardCurrency(summary.approximateTaxAmount);
-  const totalAmount = formatCardCurrency(summary.totalAmount);
   const percentage = formatPercentage(summary.percentage);
   const countLabel = summary.count === 1 ? 'nota' : 'notas';
   const shareText = [
-    `${period.text}, ${taxAmount} foram tributos aproximados nas minhas compras.`,
+    `${period.text}, paguei ${taxAmount} em tributos aproximados nas minhas compras.`,
     `${summary.count} ${countLabel} • ${percentage} do valor pago.`,
     `Veja quanto imposto existe nas suas compras: ${SHARE_CARD_APP_URL}`,
   ].join(' ');
@@ -90,11 +89,11 @@ export function buildSummaryShareCardPayload(
     kind: 'summary',
     brand: SHARE_CARD_BRAND,
     eyebrow: period.eyebrow,
+    primaryIntro: `${period.text}, paguei`,
     primaryAmount: taxAmount,
     primaryLabel: 'em tributos aproximados',
     statRows: [
       { label: 'Notas', value: `${summary.count} ${countLabel}` },
-      { label: 'Total comprado', value: totalAmount },
       { label: 'Peso médio', value: `${percentage} do valor pago` },
     ],
     note: 'Resumo local deste dispositivo. Sem login e sem envio para servidor.',

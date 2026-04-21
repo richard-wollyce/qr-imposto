@@ -28,11 +28,10 @@ describe('share card payload', () => {
     expect(payload.statRows).toEqual([
       { label: 'Compra', value: 'R$ 92,00' },
       { label: 'Peso', value: '20% do valor pago' },
-      { label: 'Confiança', value: 'Média confiança' },
     ]);
     expect(payload.shareText).toContain('tributos aproximados');
     expect(payload.shareText).toContain(SHARE_CARD_APP_URL);
-    expect(serialized).toContain('Desenvolvido por Richard Wollyce');
+    expect(serialized).not.toContain('Open-source');
     expect(serialized).not.toContain('Mercado Sensível');
     expect(serialized).not.toContain('35260412345678000195650010000001234567890123');
     expect(serialized).not.toContain('12.345.678/0001-95');
@@ -54,6 +53,7 @@ describe('share card payload', () => {
     expect(payload).toMatchObject({
       kind: 'summary',
       eyebrow,
+      primaryIntro: `${eyebrow}, paguei`,
       primaryAmount: 'R$ 40,00',
       primaryLabel: 'em tributos aproximados',
       fileName,
@@ -62,9 +62,9 @@ describe('share card payload', () => {
     });
     expect(payload.statRows).toEqual([
       { label: 'Notas', value: '2 notas' },
-      { label: 'Total comprado', value: 'R$ 200,00' },
       { label: 'Peso médio', value: '20% do valor pago' },
     ]);
+    expect(payload.shareText).toContain(`${eyebrow}, paguei R$ 40,00 em tributos aproximados`);
     expect(payload.shareText).toContain('2 notas');
     expect(payload.shareText).toContain(SHARE_CARD_APP_URL);
   });

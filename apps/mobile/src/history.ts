@@ -34,6 +34,13 @@ export type HistorySummaries = {
   all: HistorySummary;
 };
 
+export type HistorySeriesPoint = HistorySummary & {
+  key: string;
+  label: string;
+  startDate: Date;
+  endDate: Date;
+};
+
 type SuccessfulScan = Extract<ScanResult, { ok: true }>;
 
 export type SaveScanResultOutcome = {
@@ -109,6 +116,37 @@ export function summarizeScanHistory(entries: ScanHistoryEntry[], now = new Date
   };
 }
 
+export function buildWeeklyTaxSeries(entries: ScanHistoryEntry[], now = new Date()): HistorySeriesPoint[] {
+  const weekStart = startOfWeek(now);
+  return Array.from({ length: 7 }, (_, index) => {
+    const startDate = addDays(weekStart, index);
+    const endDate = addDays(startDate, 1);
+    return buildSeriesPoint(entries, startDate, endDate, WEEKDAY_LABELS[index] ?? '', formatDateKey(startDate));
+  });
+}
+
+export function buildMonthlyTaxSeries(entries: ScanHistoryEntry[], now = new Date()): HistorySeriesPoint[] {
+  const monthStart = startOfMonth(now);
+  const daysInMonth = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0).getDate();
+
+  return Array.from({ length: daysInMonth }, (_, index) => {
+    const startDate = addDays(monthStart, index);
+    const endDate = addDays(startDate, 1);
+    const day = String(index + 1);
+    return buildSeriesPoint(entries, startDate, endDate, day, formatDateKey(startDate));
+  });
+}
+
+export function buildYearlyTaxSeries(entries: ScanHistoryEntry[], now = new Date()): HistorySeriesPoint[] {
+  const year = now.getFullYear();
+
+  return Array.from({ length: 12 }, (_, index) => {
+    const startDate = new Date(year, index, 1);
+    const endDate = new Date(year, index + 1, 1);
+    return buildSeriesPoint(entries, startDate, endDate, MONTH_LABELS[index] ?? '', `${year}-${pad2(index + 1)}`);
+  });
+}
+
 async function createHistoryEntry(result: SuccessfulScan): Promise<ScanHistoryEntry> {
   const scannedAt = new Date().toISOString();
 
@@ -147,9 +185,30 @@ function summarize(entries: ScanHistoryEntry[]): HistorySummary {
   };
 }
 
+function buildSeriesPoint(
+  entries: ScanHistoryEntry[],
+  startDate: Date,
+  endDate: Date,
+  label: string,
+  key: string,
+): HistorySeriesPoint {
+  return {
+    key,
+    label,
+    startDate,
+    endDate,
+    ...summarize(entries.filter((entry) => isInRange(entry.scannedAt, startDate, endDate))),
+  };
+}
+
 function isOnOrAfter(input: string, date: Date): boolean {
   const parsed = new Date(input);
   return Number.isFinite(parsed.getTime()) && parsed >= date;
+}
+
+function isInRange(input: string, startDate: Date, endDate: Date): boolean {
+  const parsed = new Date(input);
+  return Number.isFinite(parsed.getTime()) && parsed >= startDate && parsed < endDate;
 }
 
 function startOfDay(date: Date): Date {
@@ -172,6 +231,18 @@ function startOfYear(date: Date): Date {
   return new Date(date.getFullYear(), 0, 1);
 }
 
+function addDays(date: Date, days: number): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate() + days);
+}
+
+function formatDateKey(date: Date): string {
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+}
+
+function pad2(value: number): string {
+  return String(value).padStart(2, '0');
+}
+
 function isScanHistoryEntry(input: unknown): input is ScanHistoryEntry {
   if (!input || typeof input !== 'object') {
     return false;
@@ -190,3 +261,6 @@ function isScanHistoryEntry(input: unknown): input is ScanHistoryEntry {
     typeof entry.source === 'string'
   );
 }
+
+const WEEKDAY_LABELS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab', 'Dom'];
+const MONTH_LABELS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
