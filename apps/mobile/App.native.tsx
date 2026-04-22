@@ -299,7 +299,7 @@ function AppContent() {
                 <Text style={styles.processingText}>Consultando NFC-e...</Text>
               </View>
             ) : (
-              <Text style={styles.scannerHint}>Use uma NFC-e de SP de mercado, loja, farmácia ou posto.</Text>
+              <Text style={styles.scannerHint}>Use uma NFC-e de mercado, loja, farmácia ou posto.</Text>
             )}
           </View>
         </View>
@@ -532,8 +532,6 @@ function ShareCardPreview({
   payload: ShareCardPayload;
   cardRef: ShareCardCaptureRef;
 }) {
-  const visibleRows = payload.statRows.slice(0, 2);
-
   return (
     <View style={styles.sharePreviewFrame}>
       <View ref={cardRef} collapsable={false} style={styles.shareCard}>
@@ -553,10 +551,14 @@ function ShareCardPreview({
         </View>
 
         <View style={styles.shareCardStats}>
-          {visibleRows.map((row) => (
+          {payload.statRows.map((row) => (
             <View key={row.label} style={styles.shareCardStatRow}>
-              <Text style={styles.shareCardStatLabel}>{row.label}</Text>
-              <Text style={styles.shareCardStatValue}>{row.value}</Text>
+              <Text style={styles.shareCardStatLabel} numberOfLines={1} adjustsFontSizeToFit>
+                {row.label}
+              </Text>
+              <Text style={styles.shareCardStatValue} numberOfLines={1} adjustsFontSizeToFit>
+                {row.value}
+              </Text>
             </View>
           ))}
         </View>
@@ -733,8 +735,8 @@ function HistoryEntryCard({ entry, onRemove }: { entry: ScanHistoryEntry; onRemo
         </Pressable>
       </View>
       <View style={styles.historyItemMetrics}>
-        <HistoryMetric label="Impostos" value={formatCurrency(entry.approximateTaxAmount)} highlight />
-        <HistoryMetric label="Compra" value={formatCurrency(entry.totalAmount)} />
+        <HistoryMetric label="Compra" value={formatCurrency(entry.totalAmount)} tone="purchase" />
+        <HistoryMetric label="Impostos" value={formatCurrency(entry.approximateTaxAmount)} tone="tax" />
         <HistoryMetric label="Peso" value={formatPercentage(entry.percentage)} />
       </View>
       <Text style={styles.historyItemDetail}>{formatConfidenceLabel(entry.confidence)}</Text>
@@ -742,12 +744,24 @@ function HistoryEntryCard({ entry, onRemove }: { entry: ScanHistoryEntry; onRemo
   );
 }
 
-function HistoryMetric({ label, value, highlight = false }: { label: string; value: string; highlight?: boolean }) {
+function HistoryMetric({
+  label,
+  value,
+  tone = 'default',
+}: {
+  label: string;
+  value: string;
+  tone?: 'default' | 'purchase' | 'tax';
+}) {
   return (
     <View style={styles.historyMetric}>
       <Text style={styles.historyMetricLabel}>{label}</Text>
       <Text
-        style={[styles.historyMetricValue, highlight ? styles.historyMetricValueHighlight : null]}
+        style={[
+          styles.historyMetricValue,
+          tone === 'purchase' ? styles.historyMetricValuePurchase : null,
+          tone === 'tax' ? styles.historyMetricValueTax : null,
+        ]}
         numberOfLines={1}
         adjustsFontSizeToFit
       >
@@ -1781,8 +1795,11 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     letterSpacing: 0,
   },
-  historyMetricValueHighlight: {
+  historyMetricValuePurchase: {
     color: '#1349EC',
+  },
+  historyMetricValueTax: {
+    color: '#E60000',
   },
   removeIconButton: {
     width: 38,

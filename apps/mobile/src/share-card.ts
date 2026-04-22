@@ -77,11 +77,16 @@ export function buildSummaryShareCardPayload(
 ): ShareCardPayload {
   const period = PERIOD_LABELS[periodKey];
   const taxAmount = formatCardCurrency(summary.approximateTaxAmount);
+  const totalAmount = formatCardCurrency(summary.totalAmount);
   const percentage = formatPercentage(summary.percentage);
-  const countLabel = summary.count === 1 ? 'nota' : 'notas';
+  const isSingleNote = summary.count === 1;
+  const purchaseLabel = isSingleNote ? 'VALOR DA COMPRA' : 'VALOR DAS COMPRAS';
+  const purchasePhrase = isSingleNote ? 'na minha compra' : 'nas minhas compras';
+  const countDescription = `${summary.count} ${isSingleNote ? 'nota escaneada' : 'notas escaneadas'}`;
+  const percentageDescription = `${percentage} do valor ${isSingleNote ? 'da compra' : 'das compras'}`;
   const shareText = [
-    `${period.text}, paguei ${taxAmount} em tributos aproximados nas minhas compras.`,
-    `${summary.count} ${countLabel} • ${percentage} do valor pago.`,
+    `${period.text}, paguei ${taxAmount} em tributos aproximados ${purchasePhrase}.`,
+    `${countDescription} • ${percentageDescription}.`,
     `Veja quanto imposto existe nas suas compras: ${SHARE_CARD_APP_URL}`,
   ].join(' ');
 
@@ -93,8 +98,9 @@ export function buildSummaryShareCardPayload(
     primaryAmount: taxAmount,
     primaryLabel: 'em tributos aproximados',
     statRows: [
-      { label: 'Notas', value: `${summary.count} ${countLabel}` },
-      { label: 'Peso médio', value: `${percentage} do valor pago` },
+      { label: purchaseLabel, value: totalAmount },
+      { label: 'NOTAS DE COMPRA NFC-E', value: countDescription },
+      { label: 'PORCENTAGEM DE IMPOSTO', value: percentageDescription },
     ],
     note: 'Resumo local deste dispositivo. Sem login e sem envio para servidor.',
     cta: 'Veja quanto imposto existe nas suas compras',

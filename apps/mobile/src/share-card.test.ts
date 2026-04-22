@@ -61,12 +61,31 @@ describe('share card payload', () => {
       shareUrl: SHARE_CARD_APP_URL,
     });
     expect(payload.statRows).toEqual([
-      { label: 'Notas', value: '2 notas' },
-      { label: 'Peso médio', value: '20% do valor pago' },
+      { label: 'VALOR DAS COMPRAS', value: 'R$ 200,00' },
+      { label: 'NOTAS DE COMPRA NFC-E', value: '2 notas escaneadas' },
+      { label: 'PORCENTAGEM DE IMPOSTO', value: '20% do valor das compras' },
     ]);
     expect(payload.shareText).toContain(`${eyebrow}, paguei R$ 40,00 em tributos aproximados`);
-    expect(payload.shareText).toContain('2 notas');
+    expect(payload.shareText).toContain('2 notas escaneadas');
+    expect(payload.shareText).toContain('20% do valor das compras');
     expect(payload.shareText).toContain(SHARE_CARD_APP_URL);
+  });
+
+  it('uses singular copy for a one-note summary card', () => {
+    const payload = buildSummaryShareCardPayload(
+      'today',
+      { count: 1, totalAmount: 92, approximateTaxAmount: 18.4, percentage: 20 },
+      new Date('2026-04-20T12:00:00.000Z'),
+    );
+
+    expect(payload.statRows).toEqual([
+      { label: 'VALOR DA COMPRA', value: 'R$ 92,00' },
+      { label: 'NOTAS DE COMPRA NFC-E', value: '1 nota escaneada' },
+      { label: 'PORCENTAGEM DE IMPOSTO', value: '20% do valor da compra' },
+    ]);
+    expect(payload.shareText).toContain('Hoje, paguei R$ 18,40 em tributos aproximados na minha compra');
+    expect(payload.shareText).toContain('1 nota escaneada');
+    expect(payload.shareText).toContain('20% do valor da compra');
   });
 
   it('does not break summary cards with zero notes', () => {
@@ -77,9 +96,10 @@ describe('share card payload', () => {
     );
 
     expect(payload.primaryAmount).toBe('R$ 0,00');
-    expect(payload.statRows).toContainEqual({ label: 'Notas', value: '0 notas' });
-    expect(payload.statRows).toContainEqual({ label: 'Peso médio', value: '0% do valor pago' });
-    expect(payload.shareText).toContain('0 notas');
+    expect(payload.statRows).toContainEqual({ label: 'VALOR DAS COMPRAS', value: 'R$ 0,00' });
+    expect(payload.statRows).toContainEqual({ label: 'NOTAS DE COMPRA NFC-E', value: '0 notas escaneadas' });
+    expect(payload.statRows).toContainEqual({ label: 'PORCENTAGEM DE IMPOSTO', value: '0% do valor das compras' });
+    expect(payload.shareText).toContain('0 notas escaneadas');
   });
 
   it('builds a stable PNG filename', () => {
