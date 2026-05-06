@@ -3,6 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useCameraPermissions } from 'expo-camera';
 import {
   ActivityIndicator,
+  Linking,
   Modal,
   Pressable,
   ScrollView,
@@ -66,6 +67,8 @@ type ShareState =
   | { status: 'error'; message: string };
 
 type ShareActionId = 'system';
+
+const PRIVACY_POLICY_URL = 'https://qr.richardwollyce.com/privacidade';
 
 export default function App() {
   return (
@@ -183,6 +186,10 @@ function AppContent() {
     selectMainTab('insights');
   }, [selectMainTab]);
 
+  const openPrivacyPolicy = useCallback(() => {
+    Linking.openURL(PRIVACY_POLICY_URL).catch(() => undefined);
+  }, []);
+
   const clearHistory = useCallback(async () => {
     await clearScanHistory();
     setHistoryEntries([]);
@@ -214,8 +221,12 @@ function AppContent() {
           <Text style={styles.brand}>QR Imposto</Text>
           <Text style={styles.permissionTitle}>A câmera é necessária para ler o QR Code da NFC-e.</Text>
           <Text style={styles.permissionText}>
-            A leitura acontece no seu dispositivo. No MVP, o histórico fica local e não é salvo em nuvem.
+            A câmera é usada só para ler o QR Code. Após a leitura, o app consulta a URL HTTPS pública da NFC-e na
+            SEFAZ para mostrar os valores da nota; o histórico fica local e não é salvo em nuvem.
           </Text>
+          <Pressable accessibilityRole="link" style={styles.privacyLinkButton} onPress={openPrivacyPolicy}>
+            <Text style={styles.privacyLinkText}>Política de Privacidade</Text>
+          </Pressable>
           <Pressable style={styles.primaryButton} onPress={requestPermission}>
             <Text style={styles.primaryButtonText}>Permitir câmera</Text>
           </Pressable>
@@ -299,7 +310,12 @@ function AppContent() {
                 <Text style={styles.processingText}>Consultando NFC-e...</Text>
               </View>
             ) : (
-              <Text style={styles.scannerHint}>Use uma NFC-e de mercado, loja, farmácia ou posto.</Text>
+              <View style={styles.scannerHintGroup}>
+                <Text style={styles.scannerHint}>Use uma NFC-e de mercado, loja, farmácia ou posto.</Text>
+                <Pressable accessibilityRole="link" onPress={openPrivacyPolicy}>
+                  <Text style={styles.scannerPrivacyLinkText}>Política de Privacidade</Text>
+                </Pressable>
+              </View>
             )}
           </View>
         </View>
@@ -1101,11 +1117,23 @@ const styles = StyleSheet.create({
     minHeight: 66,
     justifyContent: 'center',
   },
+  scannerHintGroup: {
+    alignItems: 'center',
+    gap: 8,
+  },
   scannerHint: {
     color: '#F8F4EA',
     fontSize: 15,
     lineHeight: 21,
     textAlign: 'center',
+  },
+  scannerPrivacyLinkText: {
+    color: '#F6C453',
+    fontSize: 13,
+    lineHeight: 18,
+    textAlign: 'center',
+    fontWeight: '900',
+    textDecorationLine: 'underline',
   },
   processingPill: {
     minHeight: 54,
@@ -1198,6 +1226,18 @@ const styles = StyleSheet.create({
     color: '#5D6472',
     fontSize: 16,
     lineHeight: 23,
+  },
+  privacyLinkButton: {
+    alignSelf: 'flex-start',
+    minHeight: 32,
+    justifyContent: 'center',
+  },
+  privacyLinkText: {
+    color: '#1349EC',
+    fontSize: 15,
+    lineHeight: 21,
+    fontWeight: '900',
+    textDecorationLine: 'underline',
   },
   primaryButton: {
     minHeight: 54,

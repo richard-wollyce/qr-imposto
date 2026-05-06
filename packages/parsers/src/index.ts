@@ -89,11 +89,11 @@ export function parseNfceQrUrl(input: string): NfceQrParseResult {
     };
   }
 
-  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+  if (url.protocol !== 'https:') {
     return {
       ok: false,
       reason: 'unsupported_url',
-      message: 'Por segurança, apenas URLs HTTP ou HTTPS de consulta de NFC-e são aceitas.',
+      message: 'Por seguranca, apenas URLs HTTPS de consulta de NFC-e sao aceitas.',
     };
   }
 
@@ -157,6 +157,12 @@ export async function analyzeNfceQrUrl(input: string, fetcher: FetchLike = fetch
 }
 
 export async function fetchNfcePublicPage(url: string, fetcher: FetchLike = fetch): Promise<string> {
+  const parsedUrl = new URL(url);
+
+  if (parsedUrl.protocol !== 'https:') {
+    throw new Error('NFC-e public page must use HTTPS');
+  }
+
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15000);
 

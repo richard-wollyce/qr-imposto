@@ -43,7 +43,9 @@ O historico local nao salva:
 
 ## Consulta Direta no Android
 
-No app Android, a consulta da NFC-e pode ser feita diretamente para a URL publica do QR Code da NFC-e, apos validacao basica da URL e da UF suportada.
+No app Android, a consulta da NFC-e pode ser feita diretamente para a URL publica HTTPS do QR Code da NFC-e, apos validacao basica da URL e da UF suportada.
+
+URLs HTTP sao bloqueadas antes da consulta produtiva. A funcao de busca tambem valida HTTPS novamente antes de executar o `fetch`, para impedir chamadas futuras que desviem do parser.
 
 O fluxo produtivo do MVP bloqueia UFs diferentes de SP antes da consulta publica.
 
@@ -67,6 +69,7 @@ Para o MVP, a comunicacao publica deve ser consistente com estes pontos:
 
 - o app Android usa a camera para ler QR Code da NFC-e;
 - o app consulta a pagina publica da NFC-e para encontrar valor total e tributos aproximados;
+- a consulta publica e feita somente por HTTPS;
 - o historico e local no dispositivo;
 - nao ha login;
 - nao ha venda de dados;

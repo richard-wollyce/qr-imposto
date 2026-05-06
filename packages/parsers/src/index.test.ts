@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { computeTax } from '@qr-imposto/core';
-import { analyzeNfceQrUrl, extractAccessKey, parseNfceFromText, parseNfceQrUrl } from './index';
+import { analyzeNfceQrUrl, extractAccessKey, fetchNfcePublicPage, parseNfceFromText, parseNfceQrUrl } from './index';
 
 const accessKey = '35260412345678000195650010000001234567890123';
 
 describe('parseNfceQrUrl', () => {
-  it('accepts HTTP(S) NFC-e URLs and masks access keys', () => {
+  it('accepts HTTPS NFC-e URLs and masks access keys', () => {
     const result = parseNfceQrUrl(
       `https://www.nfce.fazenda.sp.gov.br/qrcode?p=${accessKey}|2|1|ABC`,
     );
@@ -21,6 +21,13 @@ describe('parseNfceQrUrl', () => {
 
   it('rejects non-web URLs', () => {
     expect(parseNfceQrUrl('javascript:alert(1)')).toMatchObject({
+      ok: false,
+      reason: 'unsupported_url',
+    });
+  });
+
+  it('rejects HTTP URLs before any NFC-e query leaves the device', () => {
+    expect(parseNfceQrUrl(`http://www.nfce.fazenda.sp.gov.br/qrcode?p=${accessKey}|2|1|ABC`)).toMatchObject({
       ok: false,
       reason: 'unsupported_url',
     });
@@ -94,8 +101,8 @@ describe('parseNfceFromText', () => {
     ['RJ', '33', 'https://consultadfe.fazenda.rj.gov.br/consultaNFCe/QRCode'],
     ['MG', '31', 'https://portalsped.fazenda.mg.gov.br/portalnfce/sistema/qrcode.xhtml'],
     ['RS', '43', 'https://www.sefaz.rs.gov.br/NFCE/NFCE-COM.aspx'],
-    ['PR', '41', 'http://www.fazenda.pr.gov.br/nfce/qrcode'],
-    ['PE', '26', 'http://nfce.sefaz.pe.gov.br/nfce-web/consultarNFCe'],
+    ['PR', '41', 'https://www.fazenda.pr.gov.br/nfce/qrcode'],
+    ['PE', '26', 'https://nfce.sefaz.pe.gov.br/nfce-web/consultarNFCe'],
     ['GO', '52', 'https://nfe.sefaz.go.gov.br/nfeweb/sites/nfce/danfeNFCe'],
   ])('parses synthetic %s fixture text without calling public portals', (uf, ufCode, baseUrl) => {
     const key = makeAccessKey(ufCode);
@@ -140,6 +147,14 @@ describe('parseNfceFromText', () => {
       ok: false,
       reason: 'unsupported_uf',
     });
+  });
+
+  it('keeps fetchNfcePublicPage HTTPS-only as a defense in depth', async () => {
+    await expect(
+      fetchNfcePublicPage(`http://www.nfce.fazenda.sp.gov.br/qrcode?p=${accessKey}`, async () => {
+        throw new Error('fetcher should not be called for HTTP URLs');
+      }),
+    ).rejects.toThrow('HTTPS');
   });
 });
 
