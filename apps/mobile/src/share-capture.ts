@@ -1,1 +1,1 @@
-export * from './share-capture.native';
+export * from "./share-capture.native";

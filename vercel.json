@@ -1,26 +1,26 @@
 {
-  "buildCommand": "cd apps/mobile && npx expo export -p web",
-  "outputDirectory": "apps/mobile/dist",
-  "installCommand": "npm install",
-  "rewrites": [
-    {
-      "source": "/:path*",
-      "destination": "/"
-    }
-  ],
-  "headers": [
-    {
-      "source": "/(.*)",
-      "headers": [
-        {
-          "key": "X-Content-Type-Options",
-          "value": "nosniff"
-        },
-        {
-          "key": "Referrer-Policy",
-          "value": "strict-origin-when-cross-origin"
-        }
-      ]
-    }
-  ]
+	"buildCommand": "cd apps/mobile && npx expo export -p web",
+	"outputDirectory": "apps/mobile/dist",
+	"installCommand": "npm install",
+	"rewrites": [
+		{
+			"source": "/:path*",
+			"destination": "/"
+		}
+	],
+	"headers": [
+		{
+			"source": "/(.*)",
+			"headers": [
+				{
+					"key": "X-Content-Type-Options",
+					"value": "nosniff"
+				},
+				{
+					"key": "Referrer-Policy",
+					"value": "strict-origin-when-cross-origin"
+				}
+			]
+		}
+	]
 }

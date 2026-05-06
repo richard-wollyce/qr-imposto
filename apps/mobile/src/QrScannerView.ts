@@ -1,1 +1,1 @@
-export * from './QrScannerView.native';
+export * from "./QrScannerView.native";

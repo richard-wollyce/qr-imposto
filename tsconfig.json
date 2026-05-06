@@ -1,8 +1,8 @@
 {
-  "files": [],
-  "references": [
-    { "path": "./packages/core" },
-    { "path": "./packages/parsers" },
-    { "path": "./apps/mobile" }
-  ]
+	"files": [],
+	"references": [
+		{ "path": "./packages/core" },
+		{ "path": "./packages/parsers" },
+		{ "path": "./apps/mobile" }
+	]
 }
